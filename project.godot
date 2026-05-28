@@ -1,10 +1,5 @@
 ; Engine configuration file.
-; It's best edited using the editor UI and not directly,
-; since the parameters that go here are not all obvious.
-;
-; Format:
-;   [section] ; section goes between []
-;   param=value ; assign values to parameters
+; Echo Chamber — 2D isometric temporal puzzle prototype.
 
 config_version=5
 
@@ -12,7 +7,7 @@ config_version=5
 
 config/name="Echo Chamber"
 config/description="A 2D isometric puzzle prototype about recording your movement and replaying it as echo clones to solve pressure-plate puzzles."
-run/main_scene="res://main.tscn"
+run/main_scene="res://start_screen.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
 
