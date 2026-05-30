@@ -144,6 +144,7 @@ var board_offset := Vector2.ZERO
 var mode: int = Mode.PLAY
 var tick := 0
 var player_cell := Vector2i.ZERO
+var rec_anchor := Vector2i.ZERO
 var current_path: Array = []
 var echoes: Array = []
 var pressed_plates := {}
@@ -337,6 +338,7 @@ func _restart_attempt() -> void:
 	tick = 0
 	player_cell = start_cell
 	current_path = [start_cell]
+	echoes.clear()
 	won = false; banner.visible = false
 	_snap_positions()
 	_update_state()
@@ -344,21 +346,25 @@ func _restart_attempt() -> void:
 
 func _begin_record() -> void:
 	mode = Mode.RECORD
-	tick = 0
-	player_cell = start_cell
-	current_path = [start_cell]
+	rec_anchor = player_cell
+	current_path = [player_cell]
 	message = ""
-	_snap_positions()
 	_update_state()
 	_update_hud()
 
 func _end_record() -> void:
 	if current_path.size() > 1:
-		echoes.append({"path": current_path.duplicate()})
+		echoes.append({"path": current_path.duplicate(), "start_tick": tick})
 		message = "Ghost %d recorded." % echoes.size()
 	else:
 		message = "Nothing recorded."
-	_restart_attempt()
+	mode = Mode.PLAY
+	player_cell = rec_anchor
+	current_path = [player_cell]
+	_snap_positions()
+	_update_state()
+	_check_win()
+	_update_hud()
 
 func _full_reset() -> void:
 	load_level(level_index)
@@ -464,7 +470,8 @@ func _height(cell: Vector2i) -> int:
 
 func _echo_pos(echo: Dictionary, t: int) -> Vector2i:
 	var p: Array = echo["path"]
-	return p[clamp(t, 0, p.size() - 1)]
+	var st: int = echo.get("start_tick", 0)
+	return p[clamp(t - st, 0, p.size() - 1)]
 
 func _update_state() -> void:
 	var occupied := {}

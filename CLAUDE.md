@@ -33,26 +33,33 @@ assets/sprites/*.png(.import)                 Aseprite art: floor_a, floor_b, wa
 ```
 Main.gd is intentionally single-file. Keep it that way unless asked.
 
-## Core model — "motion record" (do NOT rewrite into real-time)
-Turn-based, deterministic **lockstep**. One global tick; every move advances all ghosts one
-step. Two states (Mode.PLAY / Mode.RECORD):
+## Core model — "motion record" (relative replay; do NOT rewrite into real-time)
+Turn-based **continuous lockstep timeline**. One global tick; every player action increments
+it (it resets only on level load / death / R-T reset, NOT on banking a ghost). Two states
+(Mode.PLAY / Mode.RECORD):
 
-- **PLAY** (default): tangible. Walls block your input; stepping onto a hazard (^) kills you
-  (_die -> attempt restarts, ghosts kept). This is how you reach the exit.
-- **RECORD** (_begin_record, triggered by **holding SPACE**): you snap to the level start,
-  intangible — you may step through **walls and over hazards** (only _in_bounds limits you);
-  each step appends to current_path. **Releasing SPACE** (_end_record) banks the ghost (if
-  current_path.size() > 1) and restarts the attempt.
-- A ghost replays path[clamp(tick,0,len-1)] -> it **freezes on its last tile** past its length
-  (how it keeps holding a switch). Ghosts are non-colliding and press switches.
-- **Determinism:** _begin_record, _end_record, dying, and full reset all _restart_attempt ->
-  tick 0, player at start, all ghosts replay from 0. Keep this invariant.
+- **PLAY** (default): tangible. Walls block your input; stepping onto a hazard (^) calls _die.
+- **RECORD** (_begin_record, **holding SPACE**): recording starts at the player's CURRENT cell
+  (rec_anchor = player_cell — NO teleport to the level start, NO tick reset). You phase through
+  **walls and over hazards** (only _in_bounds limits you); each absolute cell appends to
+  current_path. **Releasing SPACE** (_end_record) banks the ghost as
+  {path = recorded cells, start_tick = current tick}, snaps the player back to rec_anchor, and
+  returns to PLAY (tick keeps running).
+- **Relative replay (the key behavior):** a ghost's cell at global tick T is
+  path[clamp(T - start_tick, 0, len-1)]. Because start_tick = the bank tick, the ghost spawns at
+  path[0] (= rec_anchor = the player's position when they recorded) and walks its path forward
+  one step per subsequent player action, then **freezes on its last tile** (holds a switch).
+  So a ghost "replays from the player's current position," not from a fixed level-start. (See
+  `_echo_pos`.) Record the same moves from a different spot and the ghost lands elsewhere.
+- **Death / reset clears ghosts:** _die and _restart_attempt wipe echoes, tick→0, player→start
+  (continuous timelines can't be partially rewound). R/T = full level reload. This is harsher
+  than the old keep-ghosts-on-death; revisit if it annoys.
 - Exit opens when every switch is occupied by player-or-ghost in the same tick (always open if
-  zero switches). Win = PLAY player on the exit while open. Because ghosts freeze on their last
-  tile, design levels so the player's path to the exit is at least as long as each ghost's path
-  (switches held by arrival — no explicit wait needed).
-- The old Phase Exchange controls (F phase / Q cancel / R commit / E swap) and the swap/teleport
-  mechanic were **removed** for being unintuitive. There is no swap and no wait.
+  zero switches). Win = PLAY player on the exit while open. Design tip: the player's path to the
+  exit (after the last record) must be long enough for the last ghost to reach its switch
+  (ghost needs len-1 ticks after its bank). Verify solvability via the headless harness.
+- The old Phase Exchange (F/Q/R/E + swap) AND the old restart-on-bank "all ghosts replay from
+  tick 0" model were **removed**. There is no swap, no wait, no per-bank restart.
 
 ## Levels (ASCII)
 levels in Main.gd: array of {name, hint, rows, vines?, heights?}.
