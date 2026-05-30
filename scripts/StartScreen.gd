@@ -36,7 +36,7 @@ func _ready() -> void:
 	_add_label("an overgrown tower of echoes", Vector2(0, 256), 1280, 24, Color("9fb3a4"), Color.BLACK, 4)
 	_prompt = _add_label("PRESS  ENTER  TO  BEGIN", Vector2(0, 474), 1280, 30, C_PLAYER, Color.BLACK, 6)
 	_add_label(
-		"Arrows/WASD: move    F: phase / commit ghost    E: swap    Space: wait    H: help    Esc: title",
+		"Arrows / WASD: move      Hold SPACE: record a ghost      R: reset      H: help      F11: fullscreen",
 		Vector2(0, 636), 1280, 16, Color("7d8f82"), Color.BLACK, 3)
 
 func _add_label(text: String, pos: Vector2, w: int, fs: int, col: Color, outline: Color, osize: int) -> Label:
@@ -59,12 +59,18 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _unhandled_input(event: InputEvent) -> void:
-	var go := false
 	if event is InputEventKey and event.pressed and not event.echo:
-		go = true
+		if event.keycode == KEY_ESCAPE:
+			get_tree().quit()
+		elif event.keycode == KEY_F11:
+			var m := DisplayServer.window_get_mode()
+			if m == DisplayServer.WINDOW_MODE_FULLSCREEN or m == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN:
+				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+			else:
+				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		else:
+			get_tree().change_scene_to_file("res://main.tscn")
 	elif event is InputEventMouseButton and event.pressed:
-		go = true
-	if go:
 		get_tree().change_scene_to_file("res://main.tscn")
 
 func _iso(cell: Vector2, origin: Vector2) -> Vector2:

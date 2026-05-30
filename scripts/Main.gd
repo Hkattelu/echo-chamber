@@ -1,23 +1,24 @@
 extends Node2D
-## ECHO CHAMBER — 2D isometric temporal-puzzle prototype ("Phase Exchange").
-## Worn overgrown-tower restyle (Claude Design handoff): mossy stone, Portal palette
-## (orange player, purple phase-ghost, teal switches/gate), heavy vignette, minimal HUD.
+## ECHO CHAMBER — 2D isometric temporal-puzzle prototype.
+## Worn overgrown-tower look; "motion record" mechanic.
 ##
-## Turn-based, deterministic lockstep. PHYSICAL (tangible: walls block, hazards kill) is how
-## you reach the exit; PHASE (intangible, recording) walks through walls/hazards then commits
-## a ghost that replays in lockstep. SWAP (E) teleports you to the nearest ghost. See CLAUDE.md.
+## Turn-based, deterministic lockstep. HOLD SPACE to record a ghost: while held you walk
+## (through walls — you are phasing), each step recorded. RELEASE to bank the ghost and snap
+## back to start; it replays your exact path in lockstep with your future moves. Stack ghosts
+## to hold switches simultaneously; the exit opens when all switches are held — then walk onto
+## it. When NOT recording you are solid: walls block you and spike pits kill you.
 
 # ---- Tunable game-feel knobs ----
-@export var tile_w: int = 96
-@export var tile_h: int = 48
-@export var wall_height: int = 38
-@export var level_step: int = 22
+@export var tile_w: int = 112
+@export var tile_h: int = 56
+@export var wall_height: int = 46
+@export var level_step: int = 28
 @export var max_climb: int = 1
-@export var move_time: float = 0.11
+@export var move_time: float = 0.10
 @export var echo_alpha: float = 0.62
 @export var phase_alpha: float = 0.5
 
-# ---- Palette (worn overgrown tower, mossy) ----
+# ---- Palette (worn overgrown tower) ----
 const C_FLOOR := Color("9ea08d")
 const C_FLOOR_EDGE := Color("585a47")
 const C_WALL_TOP := Color("8b8d78")
@@ -25,57 +26,44 @@ const C_WALL_L := Color("62644e")
 const C_WALL_R := Color("4c4e3a")
 const C_COL_L := Color("4a5a4e")
 const C_COL_R := Color("36443a")
-const C_MOSS_D := Color("3f5a2a")
-const C_MOSS_M := Color("587537")
-const C_MOSS_L := Color("7c9a48")
-const C_TEAL := Color("3a9e9a")          # --echo accent: switches, gate, glows
+const C_MOSS_D := Color("46602f")
+const C_MOSS_M := Color("5d7a3a")
 const C_PLATE := Color("2f7e7c")
 const C_PLATE_ON := Color("5fd6cf")
 const C_EXIT := Color("2a6f6e")
 const C_EXIT_ON := Color("4fe0da")
-const C_PLAYER := Color("d98a52")        # Portal-orange player
+const C_PLAYER := Color("d98a52")
 const C_PLAYER_DARK := Color("b06a36")
 const C_PLAYER_OUTLINE := Color("7c4a22")
-const C_GHOST := Color("8a78bf")         # phase-ghost purple
+const C_GHOST := Color("8a78bf")
 const C_PHASE_RING := Color("6fb6c8")
 const C_BG_IN := Color("5c6450")
 const C_BG_MID := Color("3c4234")
 const C_BG_OUT := Color("262a20")
 const C_VIGNETTE := Color(0.063, 0.078, 0.047, 0.62)
-const C_PIT_TEETH := Color("7d7a6f")
+const C_PIT_TEETH := Color("8c8a7e")
 
 const SPR := {
-	"floor_a": {"path": "res://assets/sprites/floor_a.png", "anchor": Vector2(48, 32)},
-	"floor_b": {"path": "res://assets/sprites/floor_b.png", "anchor": Vector2(48, 32)},
-	"wall":    {"path": "res://assets/sprites/wall.png",    "anchor": Vector2(48, 60)},
-	"plate":   {"path": "res://assets/sprites/plate.png",   "anchor": Vector2(36, 22)},
-	"exit":    {"path": "res://assets/sprites/exit.png",    "anchor": Vector2(44, 30)},
-	"hazard":  {"path": "res://assets/sprites/hazard.png",  "anchor": Vector2(48, 32)},
+	"floor_a": {"path": "res://assets/sprites/floor_a.png", "anchor": Vector2(56, 38)},
+	"floor_b": {"path": "res://assets/sprites/floor_b.png", "anchor": Vector2(56, 38)},
+	"wall":    {"path": "res://assets/sprites/wall.png",    "anchor": Vector2(56, 80)},
+	"hazard":  {"path": "res://assets/sprites/hazard.png",  "anchor": Vector2(56, 38)},
 }
 var tex := {}
 var bg_tex: GradientTexture2D
 
-enum Mode { PHYSICAL, PHASE }
+enum Mode { PLAY, RECORD }
 
-# ---- deterministic noise (ported from iso-tilemap.jsx) ----
 func _hash(n: float) -> float:
 	var s := sin(n * 127.1 + 311.7) * 43758.5453
 	return s - floor(s)
 
-func _blob(cx: float, cy: float, rx: float, ry: float, n: int, sd: float) -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	for i in range(n):
-		var a := (float(i) / n) * TAU
-		var rr := 0.55 + 0.45 * _hash(sd + i * 1.7)
-		pts.append(Vector2(cx + cos(a) * rx * rr, cy + sin(a) * ry * rr))
-	return pts
-
-# ---- Levels ( # wall, . floor, P start, E exit, ^ hazard, 1-9 plates ).
-#      Optional: heights (digit grid), vines ([Vector2i] wall cells with hanging vines). ----
+# ---- Levels ( # wall, . floor, P start, E exit, ^ spike pit, 1-9 switches ).
+#      Optional: vines ([Vector2i] wall cells with a hanging vine). ----
 var levels := [
 	{
 		"name": "Ghost Walk",
-		"hint": "Phase (F) through the wall onto the switch, Commit (R), then walk to the exit.",
+		"hint": "Hold SPACE and walk through the wall onto the switch, release to leave a ghost, then walk to the exit.",
 		"rows": [
 			"#########",
 			"#...P...#",
@@ -85,11 +73,24 @@ var levels := [
 			"#..###..#",
 			"#...E...#",
 			"#########"],
-		"vines": [Vector2i(2, 0), Vector2i(6, 0), Vector2i(0, 3)],
+		"vines": [Vector2i(2, 0), Vector2i(6, 0)],
+	},
+	{
+		"name": "Spike Gauntlet",
+		"hint": "Spikes kill you (not your ghost). Leave a ghost on the switch, then pick the safe gap across the pit.",
+		"rows": [
+			"#########",
+			"#..P..1.#",
+			"#.......#",
+			"#^^^^^.^#",
+			"#.......#",
+			"#...E...#",
+			"#########"],
+		"vines": [Vector2i(1, 0), Vector2i(7, 0)],
 	},
 	{
 		"name": "Dual Lock",
-		"hint": "Two sealed switches need two ghosts. Phase one onto each, then walk down to the exit.",
+		"hint": "Two sealed switches. Record one ghost onto each, then walk down to the exit.",
 		"rows": [
 			"###########",
 			"#....P....#",
@@ -100,34 +101,22 @@ var levels := [
 			"#.........#",
 			"#....E....#",
 			"###########"],
-		"vines": [Vector2i(3, 0), Vector2i(7, 0), Vector2i(0, 4)],
+		"vines": [Vector2i(3, 0), Vector2i(7, 0)],
 	},
 	{
-		"name": "First Swap",
-		"hint": "The exit is sealed. Phase a ghost inside, then Swap (E) to trade places with it.",
+		"name": "Triad",
+		"hint": "Three sealed switches need three ghosts. Phase one onto each, then take the exit.",
 		"rows": [
-			"#########",
-			"#...P...#",
-			"#.......#",
-			"#..###..#",
-			"#..#E#..#",
-			"#..###..#",
-			"#.......#",
-			"#########"],
-		"vines": [Vector2i(1, 0), Vector2i(7, 0)],
-	},
-	{
-		"name": "Hazard Crossing",
-		"hint": "Spikes kill you, not your ghost. Phase across the pit, then Swap onto the far side.",
-		"rows": [
-			"#######",
-			"#..P..#",
-			"#.....#",
-			"#^^^^^#",
-			"#.....#",
-			"#..E..#",
-			"#######"],
-		"vines": [Vector2i(1, 0), Vector2i(5, 0)],
+			"###########",
+			"#....P....#",
+			"#.........#",
+			"###.###.###",
+			"#1#.#2#.#3#",
+			"###.###.###",
+			"#.........#",
+			"#....E....#",
+			"###########"],
+		"vines": [Vector2i(0, 4), Vector2i(10, 4)],
 	},
 ]
 
@@ -152,7 +141,7 @@ var start_cell := Vector2i.ZERO
 var board_offset := Vector2.ZERO
 
 # ---- Run state ----
-var mode: int = Mode.PHYSICAL
+var mode: int = Mode.PLAY
 var tick := 0
 var player_cell := Vector2i.ZERO
 var current_path: Array = []
@@ -163,7 +152,7 @@ var won := false
 var busy := false
 var message := ""
 
-# ---- Pawn draw animation (painter-sorted; no separate token nodes) ----
+# ---- Pawn draw animation ----
 var player_pos_from := Vector2.ZERO
 var player_pos_to := Vector2.ZERO
 var echo_pos_from: Array = []
@@ -247,37 +236,27 @@ func _build_hud() -> void:
 	var cl := CanvasLayer.new()
 	cl.layer = 10
 	add_child(cl)
-	# Title card (fades on level load)
 	title_box = Control.new()
 	title_box.set_anchors_preset(Control.PRESET_FULL_RECT)
 	title_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cl.add_child(title_box)
-	title_card = _mklabel(title_box, 46, Color("e8e2d0"), 8, HORIZONTAL_ALIGNMENT_CENTER)
-	title_card.position = Vector2(0, 96)
-	title_card.size = Vector2(1280, 60)
-	subtitle = _mklabel(title_box, 17, Color("9fb0a0"), 5, HORIZONTAL_ALIGNMENT_CENTER)
-	subtitle.position = Vector2(0, 158)
-	subtitle.size = Vector2(1280, 30)
-	# Contextual prompt (bottom center)
-	prompt = _mklabel(cl, 16, Color("c6cfbe"), 5, HORIZONTAL_ALIGNMENT_CENTER)
-	prompt.position = Vector2(0, 660)
-	prompt.size = Vector2(1280, 26)
-	prompt.modulate.a = 0.82
-	# Tiny status (top-left)
-	status = _mklabel(cl, 14, Color("a9b6a0"), 4, HORIZONTAL_ALIGNMENT_LEFT)
-	status.position = Vector2(22, 18)
-	status.size = Vector2(420, 24)
+	title_card = _mklabel(title_box, 50, Color("e8e2d0"), 8, HORIZONTAL_ALIGNMENT_CENTER)
+	title_card.position = Vector2(0, 92); title_card.size = Vector2(1280, 64)
+	subtitle = _mklabel(title_box, 18, Color("9fb0a0"), 5, HORIZONTAL_ALIGNMENT_CENTER)
+	subtitle.position = Vector2(160, 160); subtitle.size = Vector2(960, 30)
+	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	prompt = _mklabel(cl, 17, Color("c6cfbe"), 5, HORIZONTAL_ALIGNMENT_CENTER)
+	prompt.position = Vector2(0, 662); prompt.size = Vector2(1280, 26)
+	prompt.modulate.a = 0.85
+	status = _mklabel(cl, 15, Color("a9b6a0"), 4, HORIZONTAL_ALIGNMENT_LEFT)
+	status.position = Vector2(24, 18); status.size = Vector2(420, 24)
 	status.modulate.a = 0.8
-	# Help overlay (toggle H)
 	help = _mklabel(cl, 16, Color("d7e2d0"), 5, HORIZONTAL_ALIGNMENT_LEFT)
-	help.position = Vector2(22, 54)
-	help.size = Vector2(640, 220)
+	help.position = Vector2(24, 52); help.size = Vector2(720, 200)
 	help.visible = false
-	help.text = "CONTROLS\nMove: Arrows / WASD     Wait: Space\nF: Phase / Commit ghost     Q: cancel phase\nE: Swap with nearest ghost\nT: reset level     N: next (after solving)\nEsc: title     H: hide this help"
-	# Win banner
-	banner = _mklabel(cl, 36, Color("ffe9a8"), 8, HORIZONTAL_ALIGNMENT_CENTER)
-	banner.position = Vector2(0, 300)
-	banner.size = Vector2(1280, 60)
+	help.text = "CONTROLS\nMove: Arrows / WASD\nHold SPACE: record a ghost (walk through walls) — release to bank it\nR / T: reset level    N: next (after solving)\nF11: fullscreen    Esc: title    H: hide help"
+	banner = _mklabel(cl, 38, Color("ffe9a8"), 8, HORIZONTAL_ALIGNMENT_CENTER)
+	banner.position = Vector2(0, 300); banner.size = Vector2(1280, 60)
 	banner.visible = false
 
 func _show_title() -> void:
@@ -287,8 +266,8 @@ func _show_title() -> void:
 	if title_tween and title_tween.is_valid():
 		title_tween.kill()
 	title_tween = create_tween()
-	title_tween.tween_interval(2.6)
-	title_tween.tween_property(title_box, "modulate:a", 0.0, 1.4)
+	title_tween.tween_interval(3.0)
+	title_tween.tween_property(title_box, "modulate:a", 0.0, 1.5)
 
 # ---- Level loading ----
 func load_level(idx: int) -> void:
@@ -352,9 +331,9 @@ func _set_anim(t: float) -> void:
 	anim_t = t
 	queue_redraw()
 
-# ---- Attempt / phase control ----
+# ---- Attempt / recording ----
 func _restart_attempt() -> void:
-	mode = Mode.PHYSICAL
+	mode = Mode.PLAY
 	tick = 0
 	player_cell = start_cell
 	current_path = [start_cell]
@@ -363,8 +342,8 @@ func _restart_attempt() -> void:
 	_update_state()
 	_update_hud()
 
-func _begin_phase() -> void:
-	mode = Mode.PHASE
+func _begin_record() -> void:
+	mode = Mode.RECORD
 	tick = 0
 	player_cell = start_cell
 	current_path = [start_cell]
@@ -373,14 +352,12 @@ func _begin_phase() -> void:
 	_update_state()
 	_update_hud()
 
-func _commit_phase() -> void:
+func _end_record() -> void:
 	if current_path.size() > 1:
 		echoes.append({"path": current_path.duplicate()})
-		message = "Ghost %d set. Phase again or solve physically." % echoes.size()
-	_restart_attempt()
-
-func _cancel_phase() -> void:
-	message = "Phase cancelled."
+		message = "Ghost %d recorded." % echoes.size()
+	else:
+		message = "Nothing recorded."
 	_restart_attempt()
 
 func _full_reset() -> void:
@@ -389,20 +366,38 @@ func _full_reset() -> void:
 func _next_level() -> void:
 	load_level((level_index + 1) % levels.size())
 
+func _toggle_fullscreen() -> void:
+	var m := DisplayServer.window_get_mode()
+	if m == DisplayServer.WINDOW_MODE_FULLSCREEN or m == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+
 # ---- Input ----
 func _unhandled_key_input(event: InputEvent) -> void:
-	if not (event is InputEventKey) or not event.pressed or event.echo:
+	if not (event is InputEventKey) or event.echo:
 		return
 	var k: int = event.keycode
+	# Hold SPACE to record; release to bank.
+	if k == KEY_SPACE:
+		if event.pressed and mode == Mode.PLAY and not won:
+			_begin_record()
+		elif not event.pressed and mode == Mode.RECORD:
+			_end_record()
+		return
+	if not event.pressed:
+		return
 	match k:
-		KEY_T, KEY_BACKSPACE: _full_reset(); return
+		KEY_R, KEY_T, KEY_BACKSPACE: _full_reset(); return
+		KEY_N:
+			if won: _next_level()
+			return
 		KEY_H:
 			show_help = not show_help
 			help.visible = show_help
 			return
-		KEY_N:
-			if won: _next_level()
-			return
+		KEY_F11:
+			_toggle_fullscreen(); return
 		KEY_ESCAPE:
 			get_tree().change_scene_to_file("res://start_screen.tscn"); return
 	if won or busy:
@@ -412,16 +407,6 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		KEY_RIGHT, KEY_D: _move(Vector2i(1, 0))
 		KEY_DOWN, KEY_S: _move(Vector2i(0, 1))
 		KEY_LEFT, KEY_A: _move(Vector2i(-1, 0))
-		KEY_SPACE: _wait()
-		KEY_F:
-			if mode == Mode.PHYSICAL: _begin_phase()
-			else: _commit_phase()
-		KEY_R, KEY_ENTER, KEY_KP_ENTER:
-			if mode == Mode.PHASE: _commit_phase()
-		KEY_Q:
-			if mode == Mode.PHASE: _cancel_phase()
-		KEY_E:
-			if mode == Mode.PHYSICAL: _swap()
 
 # ---- Movement ----
 func _in_bounds(c: Vector2i) -> bool:
@@ -434,30 +419,12 @@ func _phys_walkable(cell: Vector2i) -> bool:
 
 func _move(delta: Vector2i) -> void:
 	var target := player_cell + delta
-	if mode == Mode.PHASE:
+	if mode == Mode.RECORD:
 		if _in_bounds(target):
 			_advance(target, true)
 	else:
 		if _phys_walkable(target):
 			_advance(target, false)
-
-func _wait() -> void:
-	_advance(player_cell, mode == Mode.PHASE)
-
-func _swap() -> void:
-	if echoes.is_empty():
-		message = "No ghost to swap with — Phase (F) one first."
-		_update_hud()
-		return
-	var best := 0
-	var bestd := 1.0e20
-	for i in range(echoes.size()):
-		var gc := _echo_pos(echoes[i], tick)
-		var d := (Vector2(gc) - Vector2(player_cell)).length_squared()
-		if d < bestd:
-			bestd = d; best = i
-	message = "Swapped with Ghost %d." % (best + 1)
-	_advance(_echo_pos(echoes[best], tick), false)
 
 func _advance(new_cell: Vector2i, record: bool) -> void:
 	player_pos_from = _player_draw()
@@ -480,9 +447,9 @@ func _advance(new_cell: Vector2i, record: bool) -> void:
 func _after_step() -> void:
 	busy = false
 	_update_state()
-	if mode == Mode.PHYSICAL:
+	if mode == Mode.PLAY:
 		if hazards.has(player_cell):
-			_die("You hit the spikes! Attempt reset (ghosts kept).")
+			_die("You hit the spikes! Reset to start (ghosts kept).")
 			return
 		_check_win()
 	_update_hud()
@@ -547,12 +514,6 @@ func _draw_column(top: Vector2, depth: float) -> void:
 	draw_colored_polygon(PackedVector2Array([t[3], t[2], t[2] + down, t[3] + down]), C_COL_L)
 	draw_colored_polygon(PackedVector2Array([t[2], t[1], t[1] + down, t[2] + down]), C_COL_R)
 
-# ---- Overgrowth dressing ----
-func _draw_moss(cx: float, cy: float, r: float, sd: float, alpha := 1.0) -> void:
-	draw_colored_polygon(_blob(cx, cy, r, r * 0.5, 9, sd), Color(C_MOSS_D.r, C_MOSS_D.g, C_MOSS_D.b, alpha))
-	draw_colored_polygon(_blob(cx, cy - 1, r * 0.78, r * 0.4, 8, sd + 5), Color(C_MOSS_M.r, C_MOSS_M.g, C_MOSS_M.b, alpha))
-	draw_colored_polygon(_blob(cx - r * 0.2, cy - 2, r * 0.46, r * 0.24, 7, sd + 11), Color(C_MOSS_L.r, C_MOSS_L.g, C_MOSS_L.b, alpha))
-
 func _draw_vine(x: float, y: float, length: float, sd: float) -> void:
 	var segs := 6
 	var step := length / segs
@@ -561,13 +522,13 @@ func _draw_vine(x: float, y: float, length: float, sd: float) -> void:
 	for i in range(1, segs + 1):
 		var sway := sin(i * 1.3 + sd) * 7.0
 		pts.append(Vector2(x + sway, y + step * i))
-	draw_polyline(pts, Color(C_MOSS_D.r, C_MOSS_D.g, C_MOSS_D.b, 0.95), 2.4)
+	draw_polyline(pts, Color(C_MOSS_D.r, C_MOSS_D.g, C_MOSS_D.b, 0.9), 2.6)
 	for i in range(1, segs + 1):
 		var sway2 := sin(i * 1.3 + sd) * 7.0
 		var lp := Vector2(x + sway2 + (5 if i % 2 else -5), y + step * i)
-		draw_circle(lp, 3.0, C_MOSS_M if i % 2 else C_MOSS_L)
+		draw_circle(lp, 3.0, C_MOSS_M if i % 2 else C_MOSS_D)
 
-# ---- Vector pawns (painter-sorted, ported from design Figure) ----
+# ---- Vector pawns ----
 func _draw_stadium(cx: float, top: float, w: float, h: float, col: Color) -> void:
 	var hw := w * 0.5
 	if h > w:
@@ -584,31 +545,26 @@ func _draw_pawn(pos: Vector2, kind: int) -> void:
 	var outline := C_GHOST.darkened(0.4) if ghost else C_PLAYER_OUTLINE
 	var a := echo_alpha if ghost else (phase_alpha if phase else 1.0)
 	var cx := pos.x
-	# ground shadow
 	draw_set_transform(pos, 0.0, Vector2(1.0, 0.5))
-	draw_circle(Vector2.ZERO, 16.0, Color(0, 0, 0, (0.12 if ghost else 0.26) * a))
+	draw_circle(Vector2.ZERO, 19.0, Color(0, 0, 0, (0.12 if ghost else 0.26) * a))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	var bw := 22.0
-	var bh := 40.0
+	var bw := 26.0
+	var bh := 48.0
 	var top := pos.y - bh - 3.0
-	var headc := Vector2(cx, top - 5.0)
-	# outline silhouette
+	var headc := Vector2(cx, top - 6.0)
 	_draw_stadium(cx, top - 2.0, bw + 4.0, bh + 4.0, Color(outline.r, outline.g, outline.b, a))
-	draw_circle(headc, 11.0, Color(outline.r, outline.g, outline.b, a))
-	# fill
+	draw_circle(headc, 13.0, Color(outline.r, outline.g, outline.b, a))
 	_draw_stadium(cx, top, bw, bh, Color(body.r, body.g, body.b, a))
-	draw_circle(headc, 9.0, Color(body.r, body.g, body.b, a))
-	# left highlight (physical player reads solid)
+	draw_circle(headc, 11.0, Color(body.r, body.g, body.b, a))
 	if not ghost:
 		var hl := C_PLAYER.lightened(0.28)
-		draw_circle(Vector2(cx - 4.0, headc.y - 2.0), 3.4, Color(hl.r, hl.g, hl.b, a))
-	# rings
+		draw_circle(Vector2(cx - 5.0, headc.y - 2.0), 4.0, Color(hl.r, hl.g, hl.b, a))
 	if ghost:
-		draw_arc(Vector2(cx, top + bh * 0.4), 25.0, 0.0, TAU, 30, Color(C_GHOST.r, C_GHOST.g, C_GHOST.b, 0.5 * a), 1.6)
+		draw_arc(Vector2(cx, top + bh * 0.4), 29.0, 0.0, TAU, 32, Color(C_GHOST.r, C_GHOST.g, C_GHOST.b, 0.5 * a), 1.8)
 	elif phase:
-		draw_arc(Vector2(cx, top + bh * 0.4), 25.0, 0.0, TAU, 30, Color(C_PHASE_RING.r, C_PHASE_RING.g, C_PHASE_RING.b, 0.65), 1.6)
+		draw_arc(Vector2(cx, top + bh * 0.4), 29.0, 0.0, TAU, 32, Color(C_PHASE_RING.r, C_PHASE_RING.g, C_PHASE_RING.b, 0.65), 1.8)
 
-# ---- Rendering: one back-to-front painter pass (tiles, walls, pawns interleaved) ----
+# ---- Rendering: one back-to-front painter pass ----
 func _draw() -> void:
 	draw_texture_rect(bg_tex, Rect2(Vector2.ZERO, get_viewport_rect().size), false)
 	for s in range(0, grid_w + grid_h - 1):
@@ -625,13 +581,12 @@ func _draw() -> void:
 	_draw_paths()
 
 func _draw_pawns_at(s: int) -> void:
-	# ghosts first (so the live player reads on top when co-located)
 	for i in range(echoes.size()):
 		var gc := _echo_pos(echoes[i], tick)
 		if gc.x + gc.y == s:
 			_draw_pawn(_echo_draw(i), 2)
 	if player_cell.x + player_cell.y == s:
-		_draw_pawn(_player_draw(), 1 if mode == Mode.PHASE else 0)
+		_draw_pawn(_player_draw(), 1 if mode == Mode.RECORD else 0)
 
 func _draw_floor(cell: Vector2i) -> void:
 	var c := _surface(cell)
@@ -642,9 +597,9 @@ func _draw_floor(cell: Vector2i) -> void:
 		if not _blit("hazard", c):
 			draw_colored_polygon(_diamond(c, tile_w, tile_h), Color("1d1b17"))
 			for i in range(-1, 2):
-				var tx := c.x + i * 18.0
+				var tx := c.x + i * 20.0
 				draw_colored_polygon(PackedVector2Array([
-					Vector2(tx - 7, c.y + 4), Vector2(tx + 7, c.y + 4), Vector2(tx, c.y - 12)]), C_PIT_TEETH)
+					Vector2(tx - 8, c.y + 4), Vector2(tx + 8, c.y + 4), Vector2(tx, c.y - 14)]), C_PIT_TEETH)
 		return
 	var variant := "floor_b" if ((cell.x + cell.y) % 2 == 1) else "floor_a"
 	if not _blit(variant, c):
@@ -654,31 +609,27 @@ func _draw_floor(cell: Vector2i) -> void:
 			var ol := dia.duplicate(); ol.append(dia[0])
 			draw_polyline(ol, C_FLOOR_EDGE, 2.0)
 	if plates.has(cell):
-		if not _blit("plate", c):
-			draw_colored_polygon(_diamond(c, tile_w * 0.6, tile_h * 0.6), C_PLATE.darkened(0.2))
 		var on: bool = pressed_plates.get(cell, false)
 		var glow := C_PLATE_ON if on else C_PLATE
-		var ga := 0.6 if on else 0.3
-		draw_colored_polygon(_diamond(c, tile_w * 1.0, tile_h * 1.0), Color(glow.r, glow.g, glow.b, ga * 0.4))
-		draw_colored_polygon(_diamond(c, tile_w * 0.5, tile_h * 0.5), Color(glow.r, glow.g, glow.b, ga))
+		var ga := 0.62 if on else 0.32
+		draw_colored_polygon(_diamond(c, tile_w * 0.62, tile_h * 0.62), Color(glow.r, glow.g, glow.b, ga * 0.45))
+		draw_colored_polygon(_diamond(c, tile_w * 0.42, tile_h * 0.42), Color(glow.r, glow.g, glow.b, ga))
+		draw_colored_polygon(_diamond(c, tile_w * 0.18, tile_h * 0.18), Color(1, 1, 1, ga * 0.5))
 	if cell == exit_cell:
-		if not _blit("exit", c):
-			draw_colored_polygon(_diamond(c, tile_w * 0.78, tile_h * 0.78), C_EXIT.darkened(0.35))
-			draw_colored_polygon(_diamond(c, tile_w * 0.52, tile_h * 0.52), C_EXIT)
 		var ecol := C_EXIT_ON if exit_open else C_EXIT
-		var ea := 0.7 if exit_open else 0.32
-		draw_colored_polygon(_diamond(c, tile_w * 0.4, tile_h * 0.4), Color(ecol.r, ecol.g, ecol.b, ea))
+		var ea := 0.72 if exit_open else 0.34
+		draw_colored_polygon(_diamond(c, tile_w * 0.82, tile_h * 0.82), Color(ecol.r, ecol.g, ecol.b, ea * 0.4))
+		draw_colored_polygon(_diamond(c, tile_w * 0.5, tile_h * 0.5), Color(ecol.r, ecol.g, ecol.b, ea))
 		if exit_open:
-			draw_colored_polygon(_diamond(c, tile_w * 0.2, tile_h * 0.2), Color(1, 1, 1, 0.5))
+			draw_colored_polygon(_diamond(c, tile_w * 0.24, tile_h * 0.24), Color(1, 1, 1, 0.5))
 			var bw := tile_w * 0.16
 			draw_colored_polygon(PackedVector2Array([
 				c + Vector2(-bw, 0), c + Vector2(bw, 0),
-				c + Vector2(bw * 0.55, -84.0), c + Vector2(-bw * 0.55, -84.0)]),
+				c + Vector2(bw * 0.55, -96.0), c + Vector2(-bw * 0.55, -96.0)]),
 				Color(C_EXIT_ON.r, C_EXIT_ON.g, C_EXIT_ON.b, 0.16))
 
 func _draw_wall(cell: Vector2i) -> void:
-	var has_sprite := _blit("wall", _ground(cell))
-	if not has_sprite:
+	if not _blit("wall", _ground(cell)):
 		var base := _ground(cell)
 		var top := base - Vector2(0, wall_height)
 		var b := _diamond(base, tile_w, tile_h)
@@ -688,18 +639,11 @@ func _draw_wall(cell: Vector2i) -> void:
 		draw_colored_polygon(t, C_WALL_TOP)
 		var ol := t.duplicate(); ol.append(t[0])
 		draw_polyline(ol, C_WALL_TOP.darkened(0.4), 2.0)
-		# procedural moss creeping over the top edge
-		var sd := cell.x * 7.1 + cell.y * 3.3
-		if _hash(sd) > 0.35:
-			_draw_moss(top.x - 6, top.y + 2, 13.0, sd, 0.95)
-	# hanging vine (data-driven, on top of sprite or shapes)
 	if vines.has(cell):
 		var base2 := _ground(cell)
-		var sx := base2.x - tile_w * 0.22
-		var sy := base2.y - wall_height + 8.0
-		_draw_vine(sx, sy, wall_height + 8.0, cell.x * 2.7 + cell.y * 1.9)
+		_draw_vine(base2.x - tile_w * 0.22, base2.y - wall_height + 8.0, wall_height + 8.0, cell.x * 2.7 + cell.y * 1.9)
 
-# ---- Path traces (guides) ----
+# ---- Path traces ----
 func _draw_trace(path: Array, col: Color, w: float) -> void:
 	if path.size() < 1:
 		return
@@ -713,8 +657,8 @@ func _draw_trace(path: Array, col: Color, w: float) -> void:
 
 func _draw_paths() -> void:
 	for e in echoes:
-		_draw_trace(e["path"], Color(C_GHOST.r, C_GHOST.g, C_GHOST.b, 0.26), 2.0)
-	if mode == Mode.PHASE and current_path.size() > 1:
+		_draw_trace(e["path"], Color(C_GHOST.r, C_GHOST.g, C_GHOST.b, 0.24), 2.0)
+	if mode == Mode.RECORD and current_path.size() > 1:
 		_draw_trace(current_path, Color(C_GHOST.r, C_GHOST.g, C_GHOST.b, 0.9), 3.0)
 
 # ---- Minimal HUD ----
@@ -730,14 +674,10 @@ func _update_hud() -> void:
 		status.text = "ghosts %d" % echoes.size()
 		status.visible = echoes.size() > 0
 	var base := ""
-	if mode == Mode.PHASE:
-		base = "PHASE  —  move through walls  ·  F commit  ·  Q cancel"
+	if mode == Mode.RECORD:
+		base = "● RECORDING  —  walk through walls  ·  release SPACE to leave a ghost"
 	else:
-		var bits := ["F phase"]
-		if echoes.size() > 0:
-			bits.append("E swap")
-		bits.append("H help")
-		base = "  ·  ".join(bits)
+		base = "Hold SPACE to record a ghost     ·     H help"
 	if message != "":
-		base = message + "       " + base
+		base = message + "        " + base
 	prompt.text = base

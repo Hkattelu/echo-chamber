@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Echo Chamber"
-config/description="A 2D isometric puzzle prototype about recording your movement and replaying it as echo clones to solve pressure-plate puzzles."
+config/description="A 2D isometric puzzle prototype: record your movement as echo ghosts to solve switch puzzles in a worn overgrown tower."
 run/main_scene="res://start_screen.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
@@ -20,7 +20,9 @@ config/icon="res://icon.svg"
 
 window/size/viewport_width=1280
 window/size/viewport_height=720
+window/size/mode=3
 window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
 
 [rendering]
 
