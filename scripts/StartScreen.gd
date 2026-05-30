@@ -23,7 +23,7 @@ func _ready() -> void:
 	_prompt = _add_label("PRESS  ENTER  TO  BEGIN", Vector2(0, 470), 1280, 30, C_PLAYER, Color.BLACK, 6)
 
 	_add_label(
-		"Arrows / WASD: move    Space: wait    R: bank echo    Q: redo run    T: reset    Esc: quit",
+		"Arrows/WASD: move   F: phase/commit ghost   E: swap   Space: wait   T: reset   Esc: title",
 		Vector2(0, 632), 1280, 16, Color("7d8f82"), Color.BLACK, 3)
 
 func _add_label(text: String, pos: Vector2, w: int, fs: int, col: Color, outline: Color, osize: int) -> Label:
