@@ -71,15 +71,31 @@ one step. Two player states (`Mode.PHYSICAL` / `Mode.PHASE`):
   playtesting/tuning and likely the offset-swap upgrade. Build incrementally and verify
   each is solvable (drive it via the API as above) before committing.
 
-## Rendering
-- `_ground(cell)` ignores height; `_surface(cell)` = ground minus `height*level_step`. Tiles
-  + tokens use `_surface`; walls use `_ground`. `_draw()` iterates back-to-front by `x+y`.
-- `_blit(name, screen_pos)` draws `tex[name]` at `screen_pos - SPR[name].anchor`; returns
-  false if missing → procedural fallback shapes. Hazard tiles `return` after blitting (no
-  moss/plate on them). Plate/exit **glows are always procedural on top** for instant state
-  read; open exit also draws a translucent light beam.
-- Player token tints translucent blue (`C_PHASE_TINT`, `phase_alpha`) while PHASE via
-  `_apply_player_look()`; ghosts are `pawn.png` tinted `C_ECHO_TINT`. z_index 100 player, 50 ghost.
+## Rendering (worn overgrown-tower restyle)
+- Visual language is the Claude Design handoff: mossy olive stone, **Portal palette**
+  (orange player, translucent purple phase-ghost, teal switches/exit), heavy vignette,
+  isolating no-chrome HUD. Palette consts live at the top of `Main.gd` (`C_FLOOR`,
+  `C_WALL_*`, `C_MOSS_*`, `C_PLAYER*`, `C_GHOST`, `C_TEAL`, `C_PLATE*`, `C_EXIT*`, bg/vignette).
+- **One painter pass** in `_draw()`: iterate cells back-to-front by `x+y`, drawing each
+  cell's floor/wall, then ANY pawn resting on a cell of that same `x+y` (`_draw_pawns_at`).
+  This fixes the old overlap bug (pawns used to be child nodes pinned above the board) — a
+  wall with higher `x+y` now correctly occludes a pawn behind it.
+- **Pawns are vector** (`_draw_pawn`, ported from the design `Figure`): orange stadium body
+  + head + outline + shadow (player); purple, translucent (`echo_alpha`), with a ripple ring
+  (ghost); a teal `C_PHASE_RING` while the live player is PHASE. No more `Token.gd` on the
+  board (file kept but unused). Pawn motion = a tween on `anim_t` (0→1) lerping
+  `*_pos_from`→`*_pos_to` via `_set_anim` + `queue_redraw` (not node-position tweens).
+- **Background:** radial `GradientTexture2D` drawn first in `_draw`. **Vignette:** its own
+  `CanvasLayer` (layer 5) with a radial `GradientTexture2D` `TextureRect`, under the HUD layer.
+- `_ground` ignores height; `_surface` = ground − `height*level_step`. `_blit` returns false
+  if a sprite is missing → procedural fallback. Plate/exit glows are procedural teal on top;
+  open exit adds a light beam. Hazard tiles `return` after their tile.
+- **Dressing:** `_draw_moss`/`_blob`/`_hash` (procedural moss over wall tops), `_draw_vine`
+  (per-level `vines: [Vector2i]` of wall cells), `_draw_paths`/`_draw_trace` (dotted purple
+  phase-path: bright for the live recording, faint for committed ghosts).
+- **HUD** (`_build_hud`): a fading title card ("`<roman> · <name>`" + hint, fades ~2.6s after
+  load via `_show_title`), a small bottom contextual `prompt`, a tiny corner `status`
+  (switches/ghosts), and an `H`-toggled `help` overlay with full controls. Win `banner` kept.
 
 ## Sprite pipeline (Aseprite MCP)
 - Workspace (`ASEPRITE_WORKSPACE`) resolves to the **shared `prototypes/` dir**, not this
@@ -87,16 +103,16 @@ one step. Two player states (`Mode.PHYSICAL` / `Mode.PHASE`):
   `assets/sprites/` and delete leftover `.aseprite` sources. Trust the absolute path returned.
 - `draw_line` is broken — use thin filled rectangles. `draw_triangle` works (used for spikes).
   Coordinates are 0..size-1.
-- Sprite sizes / anchors (anchor = cell-center pixel landing on `_surface`):
-  floor 96x64 (48,32); wall 96x96 (48,60); plate 72x44 (36,22); exit 88x60 (44,30);
-  hazard 96x64 (48,32); pawn 44x60 (22,56 = feet).
+- Active sprites (mossy palette): `floor_a`/`floor_b` 96x64 (48,32), `wall` 96x96 (48,60),
+  `hazard` 96x64 (48,32) grey spikes. `plate`/`exit` are now drawn **procedurally** (teal)
+  and `pawn` is **vector** (`_draw_pawn`) — those three PNGs were removed. Anchors are in `SPR`.
 - Build sprites: dark silhouette pass → fill shrunk ~2px inside (leaves an outline) →
   shadow (right) / highlight (left). Moss = a few large overlapping multi-shade masses with
   ragged edges, NOT scattered single dots.
 
 ## Controls
 Arrows/WASD move · Space wait · **F** Phase / Commit ghost · **Q** cancel phase ·
-**E** Swap with nearest ghost · T reset level · N next (after solving) · Esc → title.
+**E** Swap with nearest ghost · **H** toggle help overlay · T reset · N next · Esc → title.
 
 ## Tunable @export knobs (on the Main node)
 `tile_w`, `tile_h`, `wall_height`, `level_step`, `max_climb`, `move_time`, `echo_alpha`,
