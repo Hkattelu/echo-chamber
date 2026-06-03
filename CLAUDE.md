@@ -10,6 +10,19 @@ minimal isolating HUD. Core mechanic is **motion record**: hold SPACE to record 
 your walk, release to bank it; stack ghosts to hold switches and open the exit.
 Repo: https://github.com/Hkattelu/echo-chamber (account Hkattelu).
 
+## Status — known-good, ready to build on (last verified 2026-06-03)
+Playable end-to-end. The core "motion record" loop is **verified working** and matches the
+model documented below: hold SPACE records a ghost from your CURRENT tile (no teleport), release
+banks it and snaps you back, and the ghost replays *relative to where you recorded it* and
+freezes on its last tile to hold a switch. All 4 levels load and are solvable.
+**History note:** the code had at one point regressed so SPACE teleported the player to the
+level start and ghosts replayed from tick 0 — this was fixed by restoring `rec_anchor`,
+`{path, start_tick}` banking, and the `T - start_tick` replay offset (the model the rest of this
+doc already described). If code and this doc ever disagree on the record/replay model, **this
+doc is canonical** — trust it and re-align the code.
+Natural next steps when we return: more levels (especially mixing sealed + open switches and
+spike gaps), a soft "ghost will arrive in N steps" readability cue, and audio for record/bank/win.
+
 ## Running / testing
 - Main scene is res://start_screen.tscn (title); it changes to res://main.tscn. The window is
   **fullscreen** by default (F11 toggles; Esc on the title quits).
