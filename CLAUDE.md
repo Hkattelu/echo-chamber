@@ -7,21 +7,28 @@ A 2D **isometric puzzle** prototype in **Godot 4.6** (GL Compatibility renderer)
 game jam. Worn, overgrown-tower look (Claude Design handoff): mossy olive stone, **Portal
 palette** (orange player, translucent purple ghosts, teal switches/exit), heavy vignette,
 minimal isolating HUD. Core mechanic is **motion record**: hold SPACE to record a ghost of
-your walk, release to bank it; stack ghosts to hold switches and open the exit.
+your walk as a *relative motion shape*, release to bank it anchored to where you stand; stack
+ghosts to hold switches and open the exit. The same gesture recorded from a different spot lands
+the ghost somewhere else — that re-anchoring is the whole game.
 Repo: https://github.com/Hkattelu/echo-chamber (account Hkattelu).
 
-## Status — known-good, ready to build on (last verified 2026-06-03)
-Playable end-to-end. The core "motion record" loop is **verified working** and matches the
-model documented below: hold SPACE records a ghost from your CURRENT tile (no teleport), release
-banks it and snaps you back, and the ghost replays *relative to where you recorded it* and
-freezes on its last tile to hold a switch. All 4 levels load and are solvable.
-**History note:** the code had at one point regressed so SPACE teleported the player to the
-level start and ghosts replayed from tick 0 — this was fixed by restoring `rec_anchor`,
-`{path, start_tick}` banking, and the `T - start_tick` replay offset (the model the rest of this
-doc already described). If code and this doc ever disagree on the record/replay model, **this
-doc is canonical** — trust it and re-align the code.
-Natural next steps when we return: more levels (especially mixing sealed + open switches and
-spike gaps), a soft "ghost will arrive in N steps" readability cue, and audio for record/bank/win.
+## Status — known-good, ready to build on (last verified 2026-06-15)
+Playable end-to-end. The core "motion record" loop is **verified working** under the
+**relative-delta model** documented below: hold SPACE records a ghost from your CURRENT tile
+(no teleport) as a sequence of *deltas*, release banks it **anchored to the cell you're standing
+on right now** and snaps you back, and the ghost traces that relative shape from the anchor,
+freezing on its last delta to hold a switch. Because the shape is relative, recording the same
+gesture from a different spot lands the ghost in a different place — that is what makes ghosts do
+interesting things. All 4 levels load and were **re-verified solvable** via the headless harness
+under this model (Ghost Walk, Spike Gauntlet, Dual Lock, Triad all reach `won=true`).
+**History note:** ghosts used to be stored as **absolute** world cells (`{path, start_tick}`),
+which permanently glued each ghost to the exact tiles it was recorded on — the owner flagged this
+as making the game "kind of dumb." The fix (2026-06-15) was to store `{anchor, deltas, start_tick}`
+and replay as `anchor + deltas[clamp(T - start_tick, 0, len-1)]`. If code and this doc ever
+disagree on the record/replay model, **this doc is canonical** — trust it and re-align the code.
+Natural next steps when we return: levels that exploit re-anchoring (record once, deploy the same
+shape from several spots), a soft "ghost will arrive in N steps" readability cue, and audio for
+record/bank/win.
 
 ## Running / testing
 - Main scene is res://start_screen.tscn (title); it changes to res://main.tscn. The window is
@@ -46,7 +53,7 @@ assets/sprites/*.png(.import)                 Aseprite art: floor_a, floor_b, wa
 ```
 Main.gd is intentionally single-file. Keep it that way unless asked.
 
-## Core model — "motion record" (relative replay; do NOT rewrite into real-time)
+## Core model — "motion record" (RELATIVE deltas anchored to live cell; do NOT rewrite into real-time, do NOT go back to absolute cells)
 Turn-based **continuous lockstep timeline**. One global tick; every player action increments
 it (it resets only on level load / death / R-T reset, NOT on banking a ghost). Two states
 (Mode.PLAY / Mode.RECORD):
@@ -54,25 +61,33 @@ it (it resets only on level load / death / R-T reset, NOT on banking a ghost). T
 - **PLAY** (default): tangible. Walls block your input; stepping onto a hazard (^) calls _die.
 - **RECORD** (_begin_record, **holding SPACE**): recording starts at the player's CURRENT cell
   (rec_anchor = player_cell — NO teleport to the level start, NO tick reset). You phase through
-  **walls and over hazards** (only _in_bounds limits you); each absolute cell appends to
-  current_path. **Releasing SPACE** (_end_record) banks the ghost as
-  {path = recorded cells, start_tick = current tick}, snaps the player back to rec_anchor, and
-  returns to PLAY (tick keeps running).
+  **walls and over hazards** (only _in_bounds limits you); each absolute cell you step to appends
+  to current_path (current_path stays absolute — it's only the live trace + the source for deltas).
+  **Releasing SPACE** (_end_record) converts current_path into a RELATIVE shape (deltas =
+  each recorded cell minus rec_anchor) and banks the ghost as
+  {anchor = rec_anchor, deltas = [...], start_tick = current tick}, then snaps the player back to
+  rec_anchor and returns to PLAY (tick keeps running).
 - **Relative replay (the key behavior):** a ghost's cell at global tick T is
-  path[clamp(T - start_tick, 0, len-1)]. Because start_tick = the bank tick, the ghost spawns at
-  path[0] (= rec_anchor = the player's position when they recorded) and walks its path forward
-  one step per subsequent player action, then **freezes on its last tile** (holds a switch).
-  So a ghost "replays from the player's current position," not from a fixed level-start. (See
-  `_echo_pos`.) Record the same moves from a different spot and the ghost lands elsewhere.
+  `anchor + deltas[clamp(T - start_tick, 0, len-1)]` (see `_echo_pos`). `deltas[0]` is always
+  `(0,0)`, so the ghost spawns ON its anchor the moment it's banked, then walks the relative
+  shape forward one step per subsequent player action, then **freezes on its last delta** (holds
+  a switch). The anchor is the cell the player was standing on when they recorded — i.e. the
+  ghost "plays the recorded pathway from the player's current position," NOT from a fixed
+  level-start and NOT glued to the absolute tiles it was recorded on. **Record the same gesture
+  from a different spot and the whole shape shifts** — anchor + deltas, not baked-in world cells.
+  This is the entire point of the mechanic; do not regress it back to storing absolute `path`.
 - **Death / reset clears ghosts:** _die and _restart_attempt wipe echoes, tick→0, player→start
   (continuous timelines can't be partially rewound). R/T = full level reload. This is harsher
   than the old keep-ghosts-on-death; revisit if it annoys.
 - Exit opens when every switch is occupied by player-or-ghost in the same tick (always open if
   zero switches). Win = PLAY player on the exit while open. Design tip: the player's path to the
   exit (after the last record) must be long enough for the last ghost to reach its switch
-  (ghost needs len-1 ticks after its bank). Verify solvability via the headless harness.
-- The old Phase Exchange (F/Q/R/E + swap) AND the old restart-on-bank "all ghosts replay from
-  tick 0" model were **removed**. There is no swap, no wait, no per-bank restart.
+  (ghost needs deltas.size()-1 ticks after its bank). Verify solvability via the headless harness.
+- The old **absolute-cell** model (`{path, start_tick}`, ghost glued to recorded world tiles)
+  was **removed** — the owner found it un-fun because a ghost could never be re-deployed relative
+  to a new position. The old Phase Exchange (F/Q/R/E + swap) AND the old restart-on-bank "all
+  ghosts replay from tick 0" model are also gone. There is no swap, no wait, no per-bank restart,
+  and **no absolute path** — only anchor + relative deltas.
 
 ## Levels (ASCII)
 levels in Main.gd: array of {name, hint, rows, vines?, heights?}.

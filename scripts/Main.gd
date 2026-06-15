@@ -355,9 +355,16 @@ func _begin_record() -> void:
 
 func _end_record() -> void:
   if current_path.size() > 1:
-    # start_tick = current tick so the ghost's path[0] maps to right now;
-    # each subsequent player action advances the ghost one step along its path.
-    echoes.append({"path": current_path.duplicate(), "start_tick": tick})
+    # Store the gesture as a RELATIVE shape: deltas from the cell it was recorded at.
+    # The ghost is anchored to the player's CURRENT cell (rec_anchor = where you stand
+    # right now) and traces deltas[] from there. Recording the same gesture from a
+    # different spot lands the ghost in a different place — anchor + deltas, not fixed
+    # world cells. start_tick = current tick so the ghost starts at the anchor right now
+    # and advances one step per player action, freezing on its last delta.
+    var deltas: Array = []
+    for c in current_path:
+      deltas.append((c as Vector2i) - rec_anchor)
+    echoes.append({"anchor": rec_anchor, "deltas": deltas, "start_tick": tick})
     message = "Ghost %d recorded." % echoes.size()
   else:
     message = "Nothing recorded."
@@ -471,11 +478,13 @@ func _height(cell: Vector2i) -> int:
   return heights.get(cell, 0)
 
 func _echo_pos(echo: Dictionary, t: int) -> Vector2i:
-  var p: Array = echo["path"]
+  var deltas: Array = echo["deltas"]
+  var anchor: Vector2i = echo["anchor"]
   var st: int = echo.get("start_tick", 0)
-  # Offset by start_tick so the ghost begins at path[0] the moment it's banked
-  # and advances one step per player action, freezing on its last tile.
-  return p[clamp(t - st, 0, p.size() - 1)]
+  # Anchor + the relative gesture: the ghost begins at the anchor the moment it's banked
+  # and advances one delta per player action, freezing on its last delta (holding a switch).
+  var idx: int = clamp(t - st, 0, deltas.size() - 1)
+  return anchor + (deltas[idx] as Vector2i)
 
 func _update_state() -> void:
   var occupied := {}
@@ -668,7 +677,12 @@ func _draw_trace(path: Array, col: Color, w: float) -> void:
 
 func _draw_paths() -> void:
   for e in echoes:
-    _draw_trace(e["path"], Color(C_GHOST.r, C_GHOST.g, C_GHOST.b, 0.24), 2.0)
+    # Reconstruct the ghost's absolute cells from its anchor + relative deltas.
+    var anchor: Vector2i = e["anchor"]
+    var abs_path: Array = []
+    for d in e["deltas"]:
+      abs_path.append(anchor + (d as Vector2i))
+    _draw_trace(abs_path, Color(C_GHOST.r, C_GHOST.g, C_GHOST.b, 0.24), 2.0)
   if mode == Mode.RECORD and current_path.size() > 1:
     _draw_trace(current_path, Color(C_GHOST.r, C_GHOST.g, C_GHOST.b, 0.9), 3.0)
 
