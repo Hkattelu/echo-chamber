@@ -56,7 +56,8 @@ a soft "ghost will arrive in N steps" readability cue, and audio for record/depl
 
 ## Layout
 ```
-start_screen.tscn / scripts/StartScreen.gd   title screen (code-built UI + iso backdrop)
+start_screen.tscn / scripts/StartScreen.gd   title screen (code-built UI + iso backdrop;
+                                              hero shot uses the PixelLab pl_s/gh_s sprites)
 main.tscn         / scripts/Main.gd          the whole game (grid, record/replay, render, HUD)
                     scripts/Token.gd          legacy pawn renderer — UNUSED (pawns are sprites now)
 assets/sprites/*.png(.import)                 base Aseprite art: floor_a, floor_b, wall, hazard
@@ -182,10 +183,15 @@ levels in Main.gd: array of {name, hint, rows, vines?, heights?, decor?}.
 - Workspace resolves to the **shared prototypes/ dir**, not this project. export_sprite lands
   in C:\Users\himan\prototypes\; mv PNGs into assets/sprites/ and delete the .aseprite sources.
 - draw_line is broken (use thin rects). draw_triangle works (spikes). Coords are 0..size-1.
-- Active sprites at the 112px tile: floor_a/floor_b 112x76 (anchor 56,38), wall 112x112
-  (56,80), hazard 112x76 (56,38). Switch/exit are procedural; player/ghost are vector.
-- **Moss must stay subtle:** a few small, MUTED green specks/patches (e.g. #566b3c / #455334),
-  not big bright ellipses. The first pass had ugly blobs — keep lichen restrained, low-contrast.
+- Active sprites at the 112px tile: hazard 112x76 (anchor 56,38) is still the Aseprite spike pit.
+  **floor_a, floor_b and wall are now PixelLab iso tiles** (mossy weathered cobblestone /
+  stone-brick block, 64px, anchor (32,47) scale 1.75 — same convention as the decor) that
+  **replaced the old ugly Aseprite green-blob tiles**. Switch/exit are procedural; player/ghost
+  are PixelLab character sprites.
+- **Moss must stay subtle:** a few small, MUTED green specks/patches, not big bright ellipses.
+  The original Aseprite floor/wall had ugly solid-green blobs (now replaced); whenever regenerating
+  ground/wall tiles via PixelLab `create_isometric_tile`, keep lichen restrained, low-contrast,
+  muted olive (seed 777 for style match).
 
 ## Controls
 Arrows/WASD move - hold SPACE record a gesture (release to bank a reusable shape, no ghost yet) -

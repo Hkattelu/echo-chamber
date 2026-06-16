@@ -14,12 +14,22 @@ const C_TEAL := Color("4fe0da")
 const TILE_W := 96.0
 const TILE_H := 48.0
 
+# New PixelLab character sprites (idle facing only) for the hero shot — see Main.gd.
+const CHAR_ANCHOR := Vector2(34, 58)   # foot point in the 68px character canvas
+const TITLE_CHAR_SCALE := 1.5          # a touch larger than in-game (1.35) for the title
+const CHAR_SPR := {
+	"pl_s": "res://assets/sprites/pl_s.png",
+	"gh_s": "res://assets/sprites/gh_s.png",
+}
+
 var _t := 0.0
 var _prompt: Label
 var bg_tex: GradientTexture2D
+var tex := {}
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	_load_chars()
 	var g := Gradient.new()
 	g.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
 	g.colors = PackedColorArray([C_BG_IN, C_BG_MID, C_BG_OUT])
@@ -36,7 +46,7 @@ func _ready() -> void:
 	_add_label("an overgrown tower of echoes", Vector2(0, 256), 1280, 24, Color("9fb3a4"), Color.BLACK, 4)
 	_prompt = _add_label("PRESS  ENTER  TO  BEGIN", Vector2(0, 474), 1280, 30, C_PLAYER, Color.BLACK, 6)
 	_add_label(
-		"Arrows / WASD: move      Hold SPACE: record a ghost      R: reset      H: help      F11: fullscreen",
+		"Arrows / WASD: move    Hold SPACE: record    E: deploy ghost    R: reset    H: help    F11: fullscreen",
 		Vector2(0, 636), 1280, 16, Color("7d8f82"), Color.BLACK, 3)
 
 func _add_label(text: String, pos: Vector2, w: int, fs: int, col: Color, outline: Color, osize: int) -> Label:
@@ -92,6 +102,34 @@ func _pawn(pos: Vector2, col: Color, a: float) -> void:
 	draw_circle(pos + Vector2(0, -42), 13, c)
 	draw_circle(pos + Vector2(-4, -46), 5, c.lightened(0.4))
 
+func _load_chars() -> void:
+	for sname in CHAR_SPR.keys():
+		var path: String = CHAR_SPR[sname]
+		var abs_path := ProjectSettings.globalize_path(path)
+		var p := abs_path if FileAccess.file_exists(abs_path) else path
+		if FileAccess.file_exists(p):
+			var img := Image.load_from_file(p)
+			if img != null:
+				tex[sname] = ImageTexture.create_from_image(img)
+
+# Draw a hero character sprite (idle facing). Falls back to the old vector pawn if the PNG
+# is missing, so the title never renders blank.
+func _draw_char(pos: Vector2, ghost: bool, alpha: float) -> void:
+	var sname := "gh_s" if ghost else "pl_s"
+	if not tex.has(sname):
+		_pawn(pos, C_GHOST if ghost else C_PLAYER, alpha)
+		return
+	draw_set_transform(pos, 0.0, Vector2(1.0, 0.5))
+	draw_circle(Vector2.ZERO, 17.0, Color(0, 0, 0, (0.14 if ghost else 0.28) * alpha))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var t: Texture2D = tex[sname]
+	var sz := Vector2(t.get_size())
+	draw_texture_rect(t, Rect2(pos - CHAR_ANCHOR * TITLE_CHAR_SCALE, sz * TITLE_CHAR_SCALE),
+		false, Color(1, 1, 1, alpha))
+	if ghost:
+		draw_arc(Vector2(pos.x, pos.y - 28.0), 27.0, 0.0, TAU, 28,
+			Color(C_GHOST.r, C_GHOST.g, C_GHOST.b, 0.5 * alpha), 1.6)
+
 func _draw() -> void:
 	var vp := get_viewport_rect().size
 	draw_texture_rect(bg_tex, Rect2(Vector2.ZERO, vp), false)
@@ -112,7 +150,9 @@ func _draw() -> void:
 		draw_colored_polygon(d, C_FLOOR)
 		var ol := d.duplicate(); ol.append(d[0])
 		draw_polyline(ol, C_FLOOR_EDGE, 2.0)
+	# Hero shot: player front-and-centre, two translucent echoes peeking from behind.
+	# Drawn back-to-front (echoes first, player last) so the player reads clearly on top.
 	var bob := sin(_t * 2.0) * 3.0
-	_pawn(_iso(Vector2(0, 0), origin) + Vector2(0, -2), C_PLAYER, 1.0)
-	_pawn(_iso(Vector2(-1, 1), origin) + Vector2(0, -2 + bob), C_GHOST, 0.6)
-	_pawn(_iso(Vector2(1, 1), origin) + Vector2(0, -2 - bob), C_GHOST, 0.6)
+	_draw_char(_iso(Vector2(0, 1), origin) + Vector2(0, -2 + bob), true, 0.6)
+	_draw_char(_iso(Vector2(1, 0), origin) + Vector2(0, -2 - bob), true, 0.6)
+	_draw_char(_iso(Vector2(1, 1), origin) + Vector2(0, -2), false, 1.0)

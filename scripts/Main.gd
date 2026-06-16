@@ -50,9 +50,11 @@ const C_VIGNETTE := Color(0.063, 0.078, 0.047, 0.62)
 const C_PIT_TEETH := Color("8c8a7e")
 
 const SPR := {
-  "floor_a": {"path": "res://assets/sprites/floor_a.png", "anchor": Vector2(56, 38)},
-  "floor_b": {"path": "res://assets/sprites/floor_b.png", "anchor": Vector2(56, 38)},
-  "wall":    {"path": "res://assets/sprites/wall.png",    "anchor": Vector2(56, 80)},
+  # Base ground/wall are now PixelLab iso tiles too (mossy weathered stone, replacing the old
+  # Aseprite green-blob tiles) -> same (32,47)/1.75 convention as the decor below.
+  "floor_a": {"path": "res://assets/sprites/floor_a.png", "anchor": Vector2(32, 47), "scale": 1.75},
+  "floor_b": {"path": "res://assets/sprites/floor_b.png", "anchor": Vector2(32, 47), "scale": 1.75},
+  "wall":    {"path": "res://assets/sprites/wall.png",    "anchor": Vector2(32, 47), "scale": 1.75},
   "hazard":  {"path": "res://assets/sprites/hazard.png",  "anchor": Vector2(56, 38)},
   # PixelLab iso tiles (64x64). Footprint diamond centre is at source (32,47);
   # scaled x1.75 -> exact 112x56 tile footprint (matches floor/wall geometry).
