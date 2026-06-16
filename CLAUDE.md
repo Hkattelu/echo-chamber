@@ -59,9 +59,27 @@ a soft "ghost will arrive in N steps" readability cue, and audio for record/depl
 start_screen.tscn / scripts/StartScreen.gd   title screen (code-built UI + iso backdrop)
 main.tscn         / scripts/Main.gd          the whole game (grid, record/replay, render, HUD)
                     scripts/Token.gd          legacy pawn renderer — UNUSED (pawns are vector now)
-assets/sprites/*.png(.import)                 Aseprite art: floor_a, floor_b, wall, hazard
+assets/sprites/*.png(.import)                 base Aseprite art: floor_a, floor_b, wall, hazard
+                                              + PixelLab iso tiles (64px, blit x1.75): doorway,
+                                              plate, wall_mossy, wall_cracked, crystal, brazier,
+                                              rubble, mushrooms, statue, obelisk, urn, ferns
 ```
 Main.gd is intentionally single-file. Keep it that way unless asked.
+
+## Decor system (cosmetic iso props — PixelLab MCP sprites)
+Levels may carry an optional `"decor": [[Vector2i(x,y), "sprite_name"], ...]` list, parsed in
+`load_level` into the `decor` dict (cell -> sprite). It is **purely cosmetic** — `_phys_walkable`
+never consults it, so decor cannot change solvability. Tall block props (crystal/brazier/statue/
+obelisk + the wall_mossy/wall_cracked variants) go on **wall cells** (`_draw_wall` blits the
+variant in place of `wall`); short props (rubble/mushrooms/urn/ferns) go on **quiet floor cells**
+(`_draw_floor` blits over the floor) so pawns never overlap them. The **exit** always blits
+`doorway` and **switch** cells always blit `plate`, both under their existing procedural glow.
+New sprites are PixelLab `create_isometric_tile` (1 generation each, seed 777 for style match);
+their SPR entry carries `"anchor": Vector2(32,47)` (the 64px footprint-diamond centre) and
+`"scale": 1.75` -> exact 112x56 footprint. `_blit` honours `scale` via draw_texture_rect. Runtime
+loads these PNGs through `Image.load_from_file`, so they render even without Godot .import files
+(commit the .import files anyway). Regenerate/extend via the PixelLab MCP — avoid the 20-40
+generation tools (tiles_pro, *_object) on the trial; isometric_tile/map_object are 1 gen.
 
 ## Core model — "record then deploy" (RECORD banks a reusable clipboard; DEPLOY stamps a ghost. Do NOT rewrite into real-time, do NOT go back to absolute cells, do NOT re-couple record+deploy)
 Turn-based **continuous lockstep timeline**. One global tick; every player action increments
