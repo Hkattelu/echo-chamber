@@ -64,6 +64,10 @@ const SPR := {
   "rubble":       {"path": "res://assets/sprites/rubble.png",       "anchor": Vector2(32, 47), "scale": 1.75},
   "mushrooms":    {"path": "res://assets/sprites/mushrooms.png",    "anchor": Vector2(32, 47), "scale": 1.75},
   "plate":        {"path": "res://assets/sprites/plate.png",        "anchor": Vector2(32, 47), "scale": 1.75},
+  "statue":       {"path": "res://assets/sprites/statue.png",       "anchor": Vector2(32, 47), "scale": 1.75},
+  "obelisk":      {"path": "res://assets/sprites/obelisk.png",      "anchor": Vector2(32, 47), "scale": 1.75},
+  "urn":          {"path": "res://assets/sprites/urn.png",          "anchor": Vector2(32, 47), "scale": 1.75},
+  "ferns":        {"path": "res://assets/sprites/ferns.png",        "anchor": Vector2(32, 47), "scale": 1.75},
 }
 var tex := {}
 var bg_tex: GradientTexture2D
@@ -95,7 +99,7 @@ var levels := [
       [Vector2i(3, 3), "wall_mossy"], [Vector2i(5, 3), "wall_cracked"],
       [Vector2i(3, 5), "wall_cracked"], [Vector2i(5, 5), "wall_mossy"],
       [Vector2i(1, 6), "brazier"], [Vector2i(7, 6), "brazier"],
-      [Vector2i(2, 2), "mushrooms"], [Vector2i(6, 2), "rubble"],
+      [Vector2i(2, 2), "ferns"], [Vector2i(6, 2), "rubble"], [Vector2i(6, 5), "urn"],
     ],
   },
   {
@@ -111,10 +115,10 @@ var levels := [
       "#########"],
     "vines": [Vector2i(1, 0), Vector2i(7, 0)],
     "decor": [
-      [Vector2i(8, 1), "crystal"],
+      [Vector2i(8, 1), "crystal"], [Vector2i(0, 1), "statue"],
       [Vector2i(0, 3), "wall_mossy"], [Vector2i(8, 3), "wall_cracked"],
       [Vector2i(0, 5), "brazier"], [Vector2i(8, 5), "brazier"],
-      [Vector2i(1, 4), "mushrooms"], [Vector2i(7, 4), "rubble"],
+      [Vector2i(1, 4), "mushrooms"], [Vector2i(7, 4), "urn"],
     ],
   },
   {
@@ -133,6 +137,7 @@ var levels := [
     "vines": [Vector2i(3, 0), Vector2i(7, 0)],
     "decor": [
       [Vector2i(3, 3), "crystal"], [Vector2i(7, 3), "crystal"],
+      [Vector2i(0, 1), "obelisk"], [Vector2i(10, 1), "statue"],
       [Vector2i(2, 3), "wall_mossy"], [Vector2i(4, 3), "wall_cracked"],
       [Vector2i(6, 3), "wall_cracked"], [Vector2i(8, 3), "wall_mossy"],
       [Vector2i(0, 7), "brazier"], [Vector2i(10, 7), "brazier"],
@@ -158,8 +163,9 @@ var levels := [
       [Vector2i(0, 3), "wall_mossy"], [Vector2i(2, 3), "wall_cracked"],
       [Vector2i(4, 3), "wall_cracked"], [Vector2i(6, 3), "wall_mossy"],
       [Vector2i(8, 3), "wall_mossy"], [Vector2i(10, 3), "wall_cracked"],
+      [Vector2i(0, 1), "statue"], [Vector2i(10, 1), "obelisk"],
       [Vector2i(0, 7), "brazier"], [Vector2i(10, 7), "brazier"],
-      [Vector2i(3, 6), "mushrooms"], [Vector2i(7, 6), "rubble"],
+      [Vector2i(3, 6), "ferns"], [Vector2i(7, 6), "rubble"],
     ],
   },
 ]
