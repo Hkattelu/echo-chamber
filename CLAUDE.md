@@ -21,10 +21,10 @@ hold SPACE records your walk from your CURRENT tile (no teleport) as a sequence 
 snaps you back. You then walk anywhere and press **E (deploy)** to stamp a ghost at your current
 cell that traces the clipboard shape from there, freezing on its last delta to hold a switch.
 Deploying does not consume the clipboard, so you can stamp the same shape from many spots;
-re-recording replaces the clipboard. All 4 levels load and were **re-verified solvable** via the
-headless harness under this model (Ghost Walk, Spike Gauntlet, Dual Lock, Triad all reach
-`won=true`) — the multi-switch levels are now solved by stamping ONE recorded shape from several
-positions, no layout changes were needed.
+re-recording replaces the clipboard. All **13 levels** load and were **verified solvable** via the
+headless harness under this model (each reaches `won=true`) — the multi-switch levels are solved by
+stamping ONE recorded shape from several positions. The player and ghosts are now **PixelLab
+character sprites** (orange adventurer / purple spectral echo), not vector pawns (see Rendering).
 **History note:** the mechanic evolved in two steps. (1) Ghosts used to be **absolute** world cells
 (`{path, start_tick}`), gluing each ghost to the exact tiles it was recorded on — flagged as "kind
 of dumb"; switched to `{anchor, deltas, start_tick}`. (2) That relative model was still observably
@@ -58,11 +58,13 @@ a soft "ghost will arrive in N steps" readability cue, and audio for record/depl
 ```
 start_screen.tscn / scripts/StartScreen.gd   title screen (code-built UI + iso backdrop)
 main.tscn         / scripts/Main.gd          the whole game (grid, record/replay, render, HUD)
-                    scripts/Token.gd          legacy pawn renderer — UNUSED (pawns are vector now)
+                    scripts/Token.gd          legacy pawn renderer — UNUSED (pawns are sprites now)
 assets/sprites/*.png(.import)                 base Aseprite art: floor_a, floor_b, wall, hazard
                                               + PixelLab iso tiles (64px, blit x1.75): doorway,
                                               plate, wall_mossy, wall_cracked, crystal, brazier,
                                               rubble, mushrooms, statue, obelisk, urn, ferns
+                                              + PixelLab characters (68px, x1.35): pl_*/gh_*
+                                              (player / ghost echo, _se/_sw/_ne/_nw/_s facings)
 ```
 Main.gd is intentionally single-file. Keep it that way unless asked.
 
@@ -130,17 +132,22 @@ states (Mode.PLAY / Mode.RECORD):
   E deploys it.
 
 ## Levels (ASCII)
-levels in Main.gd: array of {name, hint, rows, vines?, heights?}.
+levels in Main.gd: array of {name, hint, rows, vines?, heights?, decor?}.
 - rows: # wall, . floor, P start, E exit, ^ spike pit (lethal), 1-9 switch.
-- vines (optional): [Vector2i] wall cells that get a hanging vine. heights (optional):
-  per-cell elevation digit (currently unused — all flat; level_step/max_climb remain).
-- Built + verified solvable: 1 **Ghost Walk** (record through a wall to a sealed switch),
-  2 **Spike Gauntlet** (ghost holds a switch; find the safe gap across the pit),
-  3 **Dual Lock** (two ghosts, two sealed switches), 4 **Triad** (three ghosts/switches).
+- vines (optional): [Vector2i] wall cells that get a hanging vine. decor (optional): see the
+  Decor system section. heights (optional): per-cell elevation digit (currently unused — all
+  flat; level_step/max_climb remain).
+- **13 levels, all verified solvable** (headless harness, won=true): 1 **Ghost Walk**,
+  2 **Spike Gauntlet**, 3 **Dual Lock**, 4 **Triad**, 5 **Sentinel** (1 switch, deploy-elsewhere),
+  6 **Phase Wall** (sealed switch), 7 **Hazard Hold**, 8 **Twin Pillars** (2 switches, 1 shape),
+  9 **Inner Sanctum** (sealed inner room, long reach), 10 **Crossroads** (cross the pit both ways),
+  11 **The Moat** (ghost walks across spikes — it's immune), 12 **Triptych** (3 switches, 1 shape),
+  13 **The Vault** (3 switches above a pit, exit below).
 - Sealed switches force through-walls recording; open switches just need a ghost parked on
-  them. Under the record→deploy model the multi-switch levels (Dual Lock, Triad) are solved by
-  recording ONE shape and stamping it from several deploy positions — Triad uses a single `D,D,D`
-  shape deployed at three columns. Re-verify solvability via the headless harness before committing.
+  them (still requires a ghost — you can't stand on the switch AND the exit). Multi-switch levels
+  are solved by recording ONE shape and stamping it from several deploy positions (one ghost per
+  switch — a ghost holds only its final resting cell). **Re-verify solvability via the headless
+  harness before committing** — drive each level's solution (R / moves / E / D) and assert won.
 
 ## Rendering
 - Tiles are **112x56** (tile_w/tile_h), wall_height 46. _ground ignores height; _surface =
@@ -149,10 +156,16 @@ levels in Main.gd: array of {name, hint, rows, vines?, heights?}.
 - **One painter pass** in _draw(): iterate cells back-to-front by x+y, draw each cell's
   floor/wall, then ANY pawn whose cell has that same x+y (_draw_pawns_at). This is the fix for
   the old overlap bug — a wall with higher x+y correctly occludes a pawn behind it.
-- **Pawns are vector** (_draw_pawn): orange stadium body + head + outline + shadow (player);
-  purple translucent + ripple ring (ghost); teal C_PHASE_RING while the live player RECORDs.
-  Motion = tween on anim_t (0->1) lerping *_pos_from -> *_pos_to via _set_anim + queue_redraw
-  (NOT node-position tweens).
+- **Pawns are PixelLab character sprites** (_draw_pawn): an orange hooded adventurer (player,
+  pl_*) and a purple spectral state of the same figure (ghost echo, gh_*), each an 8-direction
+  PixelLab character (68px). Only the 4 iso-diagonal facings + idle are used: suffix _se(+x)
+  _sw(+y) _nw(-x) _ne(-y) _s(idle). `player_face` = last move delta; ghosts face the way their
+  shape last walked (_echo_face). Drawn at CHAR_SCALE (1.35) with foot anchor CHAR_ANCHOR (34,58),
+  plus a contact shadow + a ghost/phase ring. _draw_pawn_vector (the old orange stadium body) is
+  kept as a fallback when sprites are missing. Motion = tween on anim_t (0->1) lerping
+  *_pos_from -> *_pos_to via _set_anim + queue_redraw (NOT node-position tweens). To regenerate the
+  character, use PixelLab create_character (8-dir, low top-down) + create_character_state for the
+  ghost; save the se/sw/ne/nw/south rotations as pl_*/gh_*.png.
 - **Background:** radial GradientTexture2D drawn first in _draw. **Vignette:** its own
   CanvasLayer (layer 5), a radial GradientTexture2D TextureRect, under the HUD layer (10).
 - _blit returns false if a sprite is missing -> procedural fallback. Switch/exit glows are
