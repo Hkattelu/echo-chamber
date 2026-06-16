@@ -54,6 +54,16 @@ const SPR := {
   "floor_b": {"path": "res://assets/sprites/floor_b.png", "anchor": Vector2(56, 38)},
   "wall":    {"path": "res://assets/sprites/wall.png",    "anchor": Vector2(56, 80)},
   "hazard":  {"path": "res://assets/sprites/hazard.png",  "anchor": Vector2(56, 38)},
+  # PixelLab iso tiles (64x64). Footprint diamond centre is at source (32,47);
+  # scaled x1.75 -> exact 112x56 tile footprint (matches floor/wall geometry).
+  "doorway":      {"path": "res://assets/sprites/doorway.png",      "anchor": Vector2(32, 47), "scale": 1.75},
+  "crystal":      {"path": "res://assets/sprites/crystal.png",      "anchor": Vector2(32, 47), "scale": 1.75},
+  "brazier":      {"path": "res://assets/sprites/brazier.png",      "anchor": Vector2(32, 47), "scale": 1.75},
+  "wall_mossy":   {"path": "res://assets/sprites/wall_mossy.png",   "anchor": Vector2(32, 47), "scale": 1.75},
+  "wall_cracked": {"path": "res://assets/sprites/wall_cracked.png", "anchor": Vector2(32, 47), "scale": 1.75},
+  "rubble":       {"path": "res://assets/sprites/rubble.png",       "anchor": Vector2(32, 47), "scale": 1.75},
+  "mushrooms":    {"path": "res://assets/sprites/mushrooms.png",    "anchor": Vector2(32, 47), "scale": 1.75},
+  "plate":        {"path": "res://assets/sprites/plate.png",        "anchor": Vector2(32, 47), "scale": 1.75},
 }
 var tex := {}
 var bg_tex: GradientTexture2D
@@ -80,6 +90,13 @@ var levels := [
       "#...E...#",
       "#########"],
     "vines": [Vector2i(2, 0), Vector2i(6, 0)],
+    "decor": [
+      [Vector2i(4, 3), "crystal"],
+      [Vector2i(3, 3), "wall_mossy"], [Vector2i(5, 3), "wall_cracked"],
+      [Vector2i(3, 5), "wall_cracked"], [Vector2i(5, 5), "wall_mossy"],
+      [Vector2i(1, 6), "brazier"], [Vector2i(7, 6), "brazier"],
+      [Vector2i(2, 2), "mushrooms"], [Vector2i(6, 2), "rubble"],
+    ],
   },
   {
     "name": "Spike Gauntlet",
@@ -93,6 +110,12 @@ var levels := [
       "#...E...#",
       "#########"],
     "vines": [Vector2i(1, 0), Vector2i(7, 0)],
+    "decor": [
+      [Vector2i(8, 1), "crystal"],
+      [Vector2i(0, 3), "wall_mossy"], [Vector2i(8, 3), "wall_cracked"],
+      [Vector2i(0, 5), "brazier"], [Vector2i(8, 5), "brazier"],
+      [Vector2i(1, 4), "mushrooms"], [Vector2i(7, 4), "rubble"],
+    ],
   },
   {
     "name": "Dual Lock",
@@ -108,6 +131,13 @@ var levels := [
       "#....E....#",
       "###########"],
     "vines": [Vector2i(3, 0), Vector2i(7, 0)],
+    "decor": [
+      [Vector2i(3, 3), "crystal"], [Vector2i(7, 3), "crystal"],
+      [Vector2i(2, 3), "wall_mossy"], [Vector2i(4, 3), "wall_cracked"],
+      [Vector2i(6, 3), "wall_cracked"], [Vector2i(8, 3), "wall_mossy"],
+      [Vector2i(0, 7), "brazier"], [Vector2i(10, 7), "brazier"],
+      [Vector2i(1, 2), "mushrooms"], [Vector2i(9, 6), "rubble"],
+    ],
   },
   {
     "name": "Triad",
@@ -123,6 +153,14 @@ var levels := [
       "#....E....#",
       "###########"],
     "vines": [Vector2i(0, 4), Vector2i(10, 4)],
+    "decor": [
+      [Vector2i(1, 3), "crystal"], [Vector2i(5, 3), "crystal"], [Vector2i(9, 3), "crystal"],
+      [Vector2i(0, 3), "wall_mossy"], [Vector2i(2, 3), "wall_cracked"],
+      [Vector2i(4, 3), "wall_cracked"], [Vector2i(6, 3), "wall_mossy"],
+      [Vector2i(8, 3), "wall_mossy"], [Vector2i(10, 3), "wall_cracked"],
+      [Vector2i(0, 7), "brazier"], [Vector2i(10, 7), "brazier"],
+      [Vector2i(3, 6), "mushrooms"], [Vector2i(7, 6), "rubble"],
+    ],
   },
 ]
 
@@ -142,6 +180,7 @@ var hazards := {}
 var heights := {}
 var vines: Array = []
 var plates: Array[Vector2i] = []
+var decor := {}   # cell (Vector2i) -> sprite name. Cosmetic props on wall/floor cells; no gameplay effect.
 var exit_cell := Vector2i.ZERO
 var start_cell := Vector2i.ZERO
 var board_offset := Vector2.ZERO
@@ -288,6 +327,9 @@ func load_level(idx: int) -> void:
   var rows: Array = data["rows"]
   var hrows: Array = data.get("heights", [])
   vines = data.get("vines", [])
+  decor.clear()
+  for d in data.get("decor", []):
+    decor[d[0]] = d[1]   # d == [Vector2i(x, y), "sprite_name"]
   walls.clear(); floors.clear(); hazards.clear(); heights.clear(); plates.clear()
   won = false; banner.visible = false; message = ""
   grid_h = rows.size()
@@ -552,7 +594,13 @@ func _diamond(center: Vector2, w: float, h: float) -> PackedVector2Array:
 func _blit(sname: String, pos: Vector2) -> bool:
   if not tex.has(sname):
     return false
-  draw_texture(tex[sname], pos - SPR[sname]["anchor"])
+  var sc: float = SPR[sname].get("scale", 1.0)
+  var anchor: Vector2 = SPR[sname]["anchor"]
+  if sc == 1.0:
+    draw_texture(tex[sname], pos - anchor)
+  else:
+    var sz := Vector2(tex[sname].get_size())
+    draw_texture_rect(tex[sname], Rect2(pos - anchor * sc, sz * sc), false)
   return true
 
 func _draw_column(top: Vector2, depth: float) -> void:
@@ -655,7 +703,10 @@ func _draw_floor(cell: Vector2i) -> void:
       draw_colored_polygon(dia, C_FLOOR)
       var ol := dia.duplicate(); ol.append(dia[0])
       draw_polyline(ol, C_FLOOR_EDGE, 2.0)
+  if decor.has(cell):
+    _blit(decor[cell], c)   # ground props (rubble, mushrooms, crystal...) sit on the floor
   if plates.has(cell):
+    _blit("plate", c)
     var on: bool = pressed_plates.get(cell, false)
     var glow := C_PLATE_ON if on else C_PLATE
     var ga := 0.62 if on else 0.32
@@ -663,6 +714,7 @@ func _draw_floor(cell: Vector2i) -> void:
     draw_colored_polygon(_diamond(c, tile_w * 0.42, tile_h * 0.42), Color(glow.r, glow.g, glow.b, ga))
     draw_colored_polygon(_diamond(c, tile_w * 0.18, tile_h * 0.18), Color(1, 1, 1, ga * 0.5))
   if cell == exit_cell:
+    _blit("doorway", c)   # stone archway; the art carries the resting teal glow
     var ecol := C_EXIT_ON if exit_open else C_EXIT
     var ea := 0.72 if exit_open else 0.34
     draw_colored_polygon(_diamond(c, tile_w * 0.82, tile_h * 0.82), Color(ecol.r, ecol.g, ecol.b, ea * 0.4))
@@ -676,7 +728,8 @@ func _draw_floor(cell: Vector2i) -> void:
         Color(C_EXIT_ON.r, C_EXIT_ON.g, C_EXIT_ON.b, 0.16))
 
 func _draw_wall(cell: Vector2i) -> void:
-  if not _blit("wall", _ground(cell)):
+  var sname: String = decor.get(cell, "wall")   # mossy/cracked/crystal/brazier variants are full blocks
+  if not _blit(sname, _ground(cell)) and not _blit("wall", _ground(cell)):
     var base := _ground(cell)
     var top := base - Vector2(0, wall_height)
     var b := _diamond(base, tile_w, tile_h)
