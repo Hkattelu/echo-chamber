@@ -68,7 +68,22 @@ const SPR := {
   "obelisk":      {"path": "res://assets/sprites/obelisk.png",      "anchor": Vector2(32, 47), "scale": 1.75},
   "urn":          {"path": "res://assets/sprites/urn.png",          "anchor": Vector2(32, 47), "scale": 1.75},
   "ferns":        {"path": "res://assets/sprites/ferns.png",        "anchor": Vector2(32, 47), "scale": 1.75},
+  # Character rotations (PixelLab 8-dir, 68px). Drawn in _draw_pawn at CHAR_SCALE with the
+  # foot anchor CHAR_ANCHOR. pl_* = player (orange), gh_* = ghost echo (purple spectral).
+  # Suffix is the iso facing: _se(+x) _sw(+y) _nw(-x) _ne(-y) _s(idle).
+  "pl_s":  {"path": "res://assets/sprites/pl_s.png",  "anchor": Vector2(34, 58), "scale": 1.35},
+  "pl_se": {"path": "res://assets/sprites/pl_se.png", "anchor": Vector2(34, 58), "scale": 1.35},
+  "pl_sw": {"path": "res://assets/sprites/pl_sw.png", "anchor": Vector2(34, 58), "scale": 1.35},
+  "pl_ne": {"path": "res://assets/sprites/pl_ne.png", "anchor": Vector2(34, 58), "scale": 1.35},
+  "pl_nw": {"path": "res://assets/sprites/pl_nw.png", "anchor": Vector2(34, 58), "scale": 1.35},
+  "gh_s":  {"path": "res://assets/sprites/gh_s.png",  "anchor": Vector2(34, 58), "scale": 1.35},
+  "gh_se": {"path": "res://assets/sprites/gh_se.png", "anchor": Vector2(34, 58), "scale": 1.35},
+  "gh_sw": {"path": "res://assets/sprites/gh_sw.png", "anchor": Vector2(34, 58), "scale": 1.35},
+  "gh_ne": {"path": "res://assets/sprites/gh_ne.png", "anchor": Vector2(34, 58), "scale": 1.35},
+  "gh_nw": {"path": "res://assets/sprites/gh_nw.png", "anchor": Vector2(34, 58), "scale": 1.35},
 }
+const CHAR_ANCHOR := Vector2(34, 58)   # foot point in the 68px character canvas
+const CHAR_SCALE := 1.35
 var tex := {}
 var bg_tex: GradientTexture2D
 
@@ -168,6 +183,139 @@ var levels := [
       [Vector2i(3, 6), "ferns"], [Vector2i(7, 6), "rubble"],
     ],
   },
+  {
+    "name": "Sentinel",
+    "hint": "One switch, one exit — you can't stand on both. Record a short walk, deploy a ghost onto the switch, then take the exit.",
+    "decor": [[Vector2i(6, 5), "brazier"], [Vector2i(5, 6), "brazier"], [Vector2i(0, 3), "crystal"], [Vector2i(1, 5), "ferns"], [Vector2i(5, 1), "rubble"]],
+    "rows": [
+      "#######",
+      "#P....#",
+      "#.....#",
+      "#..1..#",
+      "#.....#",
+      "#....E#",
+      "#######"],
+  },
+  {
+    "name": "Phase Wall",
+    "hint": "Hold SPACE to walk THROUGH the wall while recording. Deploy above the sealed switch so the ghost drops in.",
+    "decor": [[Vector2i(6, 6), "brazier"], [Vector2i(5, 7), "brazier"], [Vector2i(3, 3), "crystal"], [Vector2i(2, 3), "wall_mossy"], [Vector2i(4, 3), "wall_cracked"], [Vector2i(1, 6), "ferns"]],
+    "rows": [
+      "#######",
+      "#P....#",
+      "#.....#",
+      "#.###.#",
+      "#.#1#.#",
+      "#.###.#",
+      "#....E#",
+      "#######"],
+  },
+  {
+    "name": "Hazard Hold",
+    "hint": "Spikes kill you, not your ghost. Park a ghost on the switch, then thread the safe gap to the exit.",
+    "decor": [[Vector2i(3, 6), "brazier"], [Vector2i(5, 6), "brazier"], [Vector2i(8, 1), "crystal"], [Vector2i(0, 1), "obelisk"], [Vector2i(1, 4), "ferns"], [Vector2i(7, 4), "urn"]],
+    "rows": [
+      "#########",
+      "#P....1.#",
+      "#.......#",
+      "#^^^.^^^#",
+      "#.......#",
+      "#...E...#",
+      "#########"],
+    "vines": [Vector2i(0, 0), Vector2i(8, 0)],
+  },
+  {
+    "name": "Twin Pillars",
+    "hint": "Two switches, one gesture. Record once, then deploy the same shape from under each pillar.",
+    "decor": [[Vector2i(3, 7), "brazier"], [Vector2i(5, 7), "brazier"], [Vector2i(0, 2), "crystal"], [Vector2i(8, 2), "crystal"], [Vector2i(1, 5), "ferns"], [Vector2i(7, 5), "rubble"]],
+    "rows": [
+      "#########",
+      "#.......#",
+      "#.1...2.#",
+      "#.......#",
+      "#...P...#",
+      "#.......#",
+      "#...E...#",
+      "#########"],
+  },
+  {
+    "name": "Inner Sanctum",
+    "hint": "The switch is walled in. Record a long reach down, deploy from above, and let the ghost phase inside.",
+    "decor": [[Vector2i(5, 2), "crystal"], [Vector2i(2, 2), "brazier"], [Vector2i(8, 2), "brazier"], [Vector2i(2, 6), "wall_mossy"], [Vector2i(8, 6), "wall_cracked"], [Vector2i(9, 1), "ferns"], [Vector2i(9, 7), "rubble"]],
+    "rows": [
+      "###########",
+      "#P........#",
+      "#.#######.#",
+      "#.#.....#.#",
+      "#.#..1..#.#",
+      "#.#.....#.#",
+      "#.#######.#",
+      "#E........#",
+      "###########"],
+  },
+  {
+    "name": "Crossroads",
+    "hint": "Switches sit across the pit from the exit. Cross the gap to plant both ghosts, then cross back.",
+    "decor": [[Vector2i(3, 7), "brazier"], [Vector2i(5, 7), "brazier"], [Vector2i(0, 1), "crystal"], [Vector2i(8, 1), "crystal"], [Vector2i(1, 5), "ferns"], [Vector2i(7, 5), "rubble"]],
+    "rows": [
+      "#########",
+      "#1.....2#",
+      "#.......#",
+      "#^^^.^^^#",
+      "#.......#",
+      "#...P...#",
+      "#...E...#",
+      "#########"],
+    "vines": [Vector2i(0, 0), Vector2i(8, 0)],
+  },
+  {
+    "name": "The Moat",
+    "hint": "A ring of spikes guards the switch. Your ghost is immune — deploy so it walks across the lava.",
+    "decor": [[Vector2i(8, 1), "brazier"], [Vector2i(7, 0), "brazier"], [Vector2i(0, 1), "obelisk"], [Vector2i(0, 8), "statue"], [Vector2i(1, 8), "ferns"], [Vector2i(7, 8), "rubble"]],
+    "rows": [
+      "#########",
+      "#P.....E#",
+      "#.......#",
+      "#.^^^^^.#",
+      "#.^...^.#",
+      "#.^.1.^.#",
+      "#.^...^.#",
+      "#.^^^^^.#",
+      "#.......#",
+      "#########"],
+  },
+  {
+    "name": "Triptych",
+    "hint": "Three switches in a row. One recorded step, deployed under each — then walk down to the exit.",
+    "decor": [[Vector2i(4, 7), "brazier"], [Vector2i(6, 7), "brazier"], [Vector2i(0, 2), "crystal"], [Vector2i(10, 2), "crystal"], [Vector2i(0, 1), "statue"], [Vector2i(10, 1), "obelisk"], [Vector2i(1, 5), "ferns"], [Vector2i(9, 5), "rubble"]],
+    "rows": [
+      "###########",
+      "#.........#",
+      "#.1..2..3.#",
+      "#.........#",
+      "#....P....#",
+      "#.........#",
+      "#....E....#",
+      "###########"],
+  },
+  {
+    "name": "The Vault",
+    "hint": "Three switches above the pit, the exit below. Cross up, stamp all three, then cross back down.",
+    "decor": [[Vector2i(4, 10), "brazier"], [Vector2i(6, 10), "brazier"], [Vector2i(0, 1), "crystal"], [Vector2i(10, 1), "crystal"], [Vector2i(0, 3), "statue"], [Vector2i(10, 3), "obelisk"], [Vector2i(1, 8), "ferns"], [Vector2i(9, 8), "rubble"]],
+    "rows": [
+      "###########",
+      "#.1.....3.#",
+      "#.........#",
+      "#....2....#",
+      "#.........#",
+      "#^^^^.^^^^#",
+      "#.........#",
+      "#....P....#",
+      "#.........#",
+      "#....E....#",
+      "###########"],
+    "vines": [Vector2i(0, 5), Vector2i(10, 5)],
+  },
 ]
 
 const ROMAN := ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII"]
@@ -195,6 +343,7 @@ var board_offset := Vector2.ZERO
 var mode: int = Mode.PLAY
 var tick := 0
 var player_cell := Vector2i.ZERO
+var player_face := Vector2i.ZERO  # last move delta -> character facing (ZERO = idle/front)
 var rec_anchor := Vector2i.ZERO   # cell where the player pressed SPACE to start recording
 var current_path: Array = []
 var gesture_deltas: Array = []    # CLIPBOARD: last recorded gesture as relative deltas (deltas[0]==(0,0)).
@@ -395,6 +544,7 @@ func _restart_attempt() -> void:
   mode = Mode.PLAY
   tick = 0
   player_cell = start_cell
+  player_face = Vector2i.ZERO
   current_path = [start_cell]
   echoes.clear()   # continuous timeline can't be partially rewound — ghosts are wiped on death/reset
   won = false; banner.visible = false
@@ -520,6 +670,7 @@ func _advance(new_cell: Vector2i, record: bool) -> void:
   player_pos_from = _player_draw()
   for i in range(echoes.size()):
     echo_pos_from[i] = _echo_draw(i)
+  player_face = new_cell - player_cell
   player_cell = new_cell
   tick += 1
   if record:
@@ -639,7 +790,44 @@ func _draw_stadium(cx: float, top: float, w: float, h: float, col: Color) -> voi
   else:
     draw_circle(Vector2(cx, top + h * 0.5), hw, col)
 
-func _draw_pawn(pos: Vector2, kind: int) -> void:
+func _face_suffix(d: Vector2i) -> String:
+  if d == Vector2i(1, 0): return "_se"
+  if d == Vector2i(0, 1): return "_sw"
+  if d == Vector2i(-1, 0): return "_nw"
+  if d == Vector2i(0, -1): return "_ne"
+  return "_s"
+
+func _echo_face(i: int) -> Vector2i:
+  var e: Dictionary = echoes[i]
+  var step := _echo_pos(e, tick) - _echo_pos(e, tick - 1)
+  if step == Vector2i.ZERO:   # frozen / not yet started -> face the way the shape last walked
+    var dl: Array = e["deltas"]
+    if dl.size() >= 2:
+      step = (dl[dl.size() - 1] as Vector2i) - (dl[dl.size() - 2] as Vector2i)
+  return step
+
+func _draw_pawn(pos: Vector2, kind: int, face: Vector2i) -> void:
+  var ghost := kind == 2
+  var phase := kind == 1
+  var a := echo_alpha if ghost else (0.82 if phase else 1.0)
+  var sname := ("gh" if ghost else "pl") + _face_suffix(face)
+  if not tex.has(sname):
+    sname = ("gh" if ghost else "pl") + "_s"
+  if tex.has(sname):
+    draw_set_transform(pos, 0.0, Vector2(1.0, 0.5))
+    draw_circle(Vector2.ZERO, 16.0, Color(0, 0, 0, (0.12 if ghost else 0.26) * a))
+    draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+    var t: Texture2D = tex[sname]
+    var sz := Vector2(t.get_size())
+    draw_texture_rect(t, Rect2(pos - CHAR_ANCHOR * CHAR_SCALE, sz * CHAR_SCALE), false, Color(1, 1, 1, a))
+    if ghost:
+      draw_arc(Vector2(pos.x, pos.y - 24.0), 25.0, 0.0, TAU, 28, Color(C_GHOST.r, C_GHOST.g, C_GHOST.b, 0.5 * a), 1.6)
+    elif phase:
+      draw_arc(Vector2(pos.x, pos.y - 24.0), 25.0, 0.0, TAU, 28, Color(C_PHASE_RING.r, C_PHASE_RING.g, C_PHASE_RING.b, 0.7), 1.8)
+    return
+  _draw_pawn_vector(pos, kind)
+
+func _draw_pawn_vector(pos: Vector2, kind: int) -> void:
   var ghost := kind == 2
   var phase := kind == 1
   var body := C_GHOST if ghost else C_PLAYER
@@ -685,9 +873,9 @@ func _draw_pawns_at(s: int) -> void:
   for i in range(echoes.size()):
     var gc := _echo_pos(echoes[i], tick)
     if gc.x + gc.y == s:
-      _draw_pawn(_echo_draw(i), 2)
+      _draw_pawn(_echo_draw(i), 2, _echo_face(i))
   if player_cell.x + player_cell.y == s:
-    _draw_pawn(_player_draw(), 1 if mode == Mode.RECORD else 0)
+    _draw_pawn(_player_draw(), 1 if mode == Mode.RECORD else 0, player_face)
 
 func _draw_floor(cell: Vector2i) -> void:
   var c := _surface(cell)
@@ -784,9 +972,12 @@ func _draw_deploy_preview() -> void:
   var landing: Vector2i = preview[preview.size() - 1]
   var lp := _surface(landing)
   # Reuse the ghost silhouette at low alpha so the player can read the resting pose.
+  var lface := Vector2i.ZERO
+  if gesture_deltas.size() >= 2:
+    lface = (gesture_deltas[gesture_deltas.size() - 1] as Vector2i) - (gesture_deltas[gesture_deltas.size() - 2] as Vector2i)
   var ga := echo_alpha
   echo_alpha = 0.20
-  _draw_pawn(lp, 2)
+  _draw_pawn(lp, 2, lface)
   echo_alpha = ga
 
 # ---- Minimal HUD ----
