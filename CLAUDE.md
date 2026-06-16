@@ -21,7 +21,7 @@ hold SPACE records your walk from your CURRENT tile (no teleport) as a sequence 
 snaps you back. You then walk anywhere and press **E (deploy)** to stamp a ghost at your current
 cell that traces the clipboard shape from there, freezing on its last delta to hold a switch.
 Deploying does not consume the clipboard, so you can stamp the same shape from many spots;
-re-recording replaces the clipboard. All **13 levels** load and were **verified solvable** via the
+re-recording replaces the clipboard. All **14 levels** load and were **verified solvable** via the
 headless harness under this model (each reaches `won=true`) — the multi-switch levels are solved by
 stamping ONE recorded shape from several positions. The player and ghosts are now **PixelLab
 character sprites** (orange adventurer / purple spectral echo), not vector pawns (see Rendering).
@@ -61,8 +61,9 @@ start_screen.tscn / scripts/StartScreen.gd   title screen (code-built UI + iso b
 main.tscn         / scripts/Main.gd          the whole game (grid, record/replay, render, HUD)
                     scripts/Token.gd          legacy pawn renderer — UNUSED (pawns are sprites now)
 assets/sprites/*.png(.import)                 base Aseprite art: floor_a, floor_b, wall, hazard
-                                              + PixelLab iso tiles (64px, blit x1.75): doorway,
-                                              plate, wall_mossy, wall_cracked, crystal, brazier,
+                                              + PixelLab iso tiles (64px, blit x1.75):
+                                              door_closed/door_open (front-facing exit, swapped by
+                                              exit_open), plate, wall_mossy, wall_cracked, crystal, brazier,
                                               rubble, mushrooms, statue, obelisk, urn, ferns
                                               + PixelLab characters (68px, x1.35): pl_*/gh_*
                                               (player / ghost echo, _se/_sw/_ne/_nw/_s facings)
@@ -75,8 +76,8 @@ Levels may carry an optional `"decor": [[Vector2i(x,y), "sprite_name"], ...]` li
 never consults it, so decor cannot change solvability. Tall block props (crystal/brazier/statue/
 obelisk + the wall_mossy/wall_cracked variants) go on **wall cells** (`_draw_wall` blits the
 variant in place of `wall`); short props (rubble/mushrooms/urn/ferns) go on **quiet floor cells**
-(`_draw_floor` blits over the floor) so pawns never overlap them. The **exit** always blits
-`doorway` and **switch** cells always blit `plate`, both under their existing procedural glow.
+(`_draw_floor` blits over the floor) so pawns never overlap them. The **exit** blits a front-facing
+`door_closed`/`door_open` (by `exit_open`) and **switch** cells always blit `plate` under their glow.
 New sprites are PixelLab `create_isometric_tile` (1 generation each, seed 777 for style match);
 their SPR entry carries `"anchor": Vector2(32,47)` (the 64px footprint-diamond centre) and
 `"scale": 1.75` -> exact 112x56 footprint. `_blit` honours `scale` via draw_texture_rect. Runtime
@@ -138,12 +139,14 @@ levels in Main.gd: array of {name, hint, rows, vines?, heights?, decor?}.
 - vines (optional): [Vector2i] wall cells that get a hanging vine. decor (optional): see the
   Decor system section. heights (optional): per-cell elevation digit (currently unused — all
   flat; level_step/max_climb remain).
-- **13 levels, all verified solvable** (headless harness, won=true): 1 **Ghost Walk**,
+- **14 levels, all verified solvable** (headless harness, won=true): 1 **Ghost Walk**,
   2 **Spike Gauntlet**, 3 **Dual Lock**, 4 **Triad**, 5 **Sentinel** (1 switch, deploy-elsewhere),
   6 **Phase Wall** (sealed switch), 7 **Hazard Hold**, 8 **Twin Pillars** (2 switches, 1 shape),
   9 **Inner Sanctum** (sealed inner room, long reach), 10 **Crossroads** (cross the pit both ways),
-  11 **The Moat** (ghost walks across spikes — it's immune), 12 **Triptych** (3 switches, 1 shape),
-  13 **The Vault** (3 switches above a pit, exit below).
+  11 **The Moat** (ghost walks across spikes — it's immune), 12 **The Crossing** (a 2-row spike wall
+  splits the room; the switch is reachable ONLY by a ghost that walks across the spikes while the
+  player takes the safe long way to the exit — the clean "ghost over spikes" level), 13 **Triptych**
+  (3 switches, 1 shape), 14 **The Vault** (3 switches above a pit, exit below).
 - Sealed switches force through-walls recording; open switches just need a ghost parked on
   them (still requires a ghost — you can't stand on the switch AND the exit). Multi-switch levels
   are solved by recording ONE shape and stamping it from several deploy positions (one ghost per
@@ -167,10 +170,14 @@ levels in Main.gd: array of {name, hint, rows, vines?, heights?, decor?}.
   *_pos_from -> *_pos_to via _set_anim + queue_redraw (NOT node-position tweens). To regenerate the
   character, use PixelLab create_character (8-dir, low top-down) + create_character_state for the
   ghost; save the se/sw/ne/nw/south rotations as pl_*/gh_*.png.
-- **Background:** radial GradientTexture2D drawn first in _draw. **Vignette:** its own
+- **Background:** radial GradientTexture2D drawn first in _draw, then **`_draw_backdrop()`** tiles a
+  faint mossy-stone iso expanse around the playable island (diamonds fading out with distance from
+  the board centre) so the map doesn't float in a void — purely cosmetic. **Vignette:** its own
   CanvasLayer (layer 5), a radial GradientTexture2D TextureRect, under the HUD layer (10).
-- _blit returns false if a sprite is missing -> procedural fallback. Switch/exit glows are
-  procedural teal on top; open exit adds a light beam. _draw_vine draws per-level vines;
+- _blit returns false if a sprite is missing -> procedural fallback. Switch glow is procedural teal
+  on top. The **exit** blits `door_closed` (a sealed barred gate, NO glow — a closed door looks
+  closed) when shut and `door_open` (a front-facing glowing teal portal + light beam) when
+  `exit_open`. _draw_vine draws per-level vines;
   _draw_paths/_draw_trace draw the dotted purple path (bright = live recording, faint =
   committed ghosts) and, when a clipboard is banked in PLAY, _draw_deploy_preview draws the teal
   dotted shape + faint ghost silhouette where pressing E would land a ghost. There is NO

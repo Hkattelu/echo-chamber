@@ -58,7 +58,8 @@ const SPR := {
   "hazard":  {"path": "res://assets/sprites/hazard.png",  "anchor": Vector2(56, 38)},
   # PixelLab iso tiles (64x64). Footprint diamond centre is at source (32,47);
   # scaled x1.75 -> exact 112x56 tile footprint (matches floor/wall geometry).
-  "doorway":      {"path": "res://assets/sprites/doorway.png",      "anchor": Vector2(32, 47), "scale": 1.75},
+  "door_closed":  {"path": "res://assets/sprites/door_closed.png",  "anchor": Vector2(32, 47), "scale": 1.75},
+  "door_open":    {"path": "res://assets/sprites/door_open.png",    "anchor": Vector2(32, 47), "scale": 1.75},
   "crystal":      {"path": "res://assets/sprites/crystal.png",      "anchor": Vector2(32, 47), "scale": 1.75},
   "brazier":      {"path": "res://assets/sprites/brazier.png",      "anchor": Vector2(32, 47), "scale": 1.75},
   "wall_mossy":   {"path": "res://assets/sprites/wall_mossy.png",   "anchor": Vector2(32, 47), "scale": 1.75},
@@ -284,6 +285,21 @@ var levels := [
       "#.^...^.#",
       "#.^^^^^.#",
       "#.......#",
+      "#########"],
+  },
+  {
+    "name": "The Crossing",
+    "hint": "You can't cross the spikes — but your echo can. Record a walk over them onto the switch, deploy on the safe edge, then take the long way around to the exit.",
+    "decor": [[Vector2i(7, 0), "brazier"], [Vector2i(8, 1), "brazier"], [Vector2i(0, 4), "obelisk"], [Vector2i(0, 7), "statue"], [Vector2i(8, 7), "crystal"], [Vector2i(3, 2), "ferns"], [Vector2i(3, 3), "rubble"]],
+    "rows": [
+      "#########",
+      "#......E#",
+      "#.......#",
+      "#.......#",
+      "#P......#",
+      "#^^^^^^^#",
+      "#^^^^^^^#",
+      "#...1...#",
       "#########"],
   },
   {
@@ -858,6 +874,7 @@ func _draw_pawn_vector(pos: Vector2, kind: int) -> void:
 # ---- Rendering: one back-to-front painter pass ----
 func _draw() -> void:
   draw_texture_rect(bg_tex, Rect2(Vector2.ZERO, get_viewport_rect().size), false)
+  _draw_backdrop()
   for s in range(0, grid_w + grid_h - 1):
     for x in range(grid_w):
       var y := s - x
@@ -870,6 +887,31 @@ func _draw() -> void:
         _draw_floor(cell)
     _draw_pawns_at(s)
   _draw_paths()
+
+# Faint isometric floor expanse around the playable island so the level doesn't float in a void.
+# Mossy-stone diamonds tile outward and fade to nothing with distance from the board centre,
+# before the vignette (layer 5) darkens the edges. Purely cosmetic — never consulted by logic.
+func _draw_backdrop() -> void:
+  if grid_w == 0 or grid_h == 0:
+    return
+  var cx := (grid_w - 1) * 0.5
+  var cy := (grid_h - 1) * 0.5
+  var edge := maxf(cx, cy)
+  var pad := 7
+  for x in range(-pad, grid_w + pad):
+    for y in range(-pad, grid_h + pad):
+      if x >= 0 and x < grid_w and y >= 0 and y < grid_h:
+        continue   # the real floor/wall pass owns the island itself
+      var d := Vector2(x - cx, y - cy).length()
+      var a := clampf(0.15 - (d - edge) * 0.017, 0.0, 0.15)
+      if a <= 0.0:
+        continue
+      var c := _ground(Vector2i(x, y))
+      var base := C_FLOOR if ((x + y) & 1) == 0 else C_FLOOR_EDGE
+      var dia := _diamond(c, tile_w, tile_h)
+      draw_colored_polygon(dia, Color(base.r, base.g, base.b, a))
+      var ol := dia.duplicate(); ol.append(dia[0])
+      draw_polyline(ol, Color(C_FLOOR_EDGE.r, C_FLOOR_EDGE.g, C_FLOOR_EDGE.b, a * 0.7), 1.0)
 
 func _draw_pawns_at(s: int) -> void:
   for i in range(echoes.size()):
@@ -910,18 +952,20 @@ func _draw_floor(cell: Vector2i) -> void:
     draw_colored_polygon(_diamond(c, tile_w * 0.42, tile_h * 0.42), Color(glow.r, glow.g, glow.b, ga))
     draw_colored_polygon(_diamond(c, tile_w * 0.18, tile_h * 0.18), Color(1, 1, 1, ga * 0.5))
   if cell == exit_cell:
-    _blit("doorway", c)   # stone archway; the art carries the resting teal glow
-    var ecol := C_EXIT_ON if exit_open else C_EXIT
-    var ea := 0.72 if exit_open else 0.34
-    draw_colored_polygon(_diamond(c, tile_w * 0.82, tile_h * 0.82), Color(ecol.r, ecol.g, ecol.b, ea * 0.4))
-    draw_colored_polygon(_diamond(c, tile_w * 0.5, tile_h * 0.5), Color(ecol.r, ecol.g, ecol.b, ea))
     if exit_open:
-      draw_colored_polygon(_diamond(c, tile_w * 0.24, tile_h * 0.24), Color(1, 1, 1, 0.5))
+      # active portal: light pools on the threshold, the open door, then a beam rising through it
+      draw_colored_polygon(_diamond(c, tile_w * 0.78, tile_h * 0.78), Color(C_EXIT_ON.r, C_EXIT_ON.g, C_EXIT_ON.b, 0.22))
+      _blit("door_open", c)
+      draw_colored_polygon(_diamond(c, tile_w * 0.34, tile_h * 0.34), Color(C_EXIT_ON.r, C_EXIT_ON.g, C_EXIT_ON.b, 0.5))
+      draw_colored_polygon(_diamond(c, tile_w * 0.16, tile_h * 0.16), Color(1, 1, 1, 0.45))
       var bw := tile_w * 0.16
       draw_colored_polygon(PackedVector2Array([
         c + Vector2(-bw, 0), c + Vector2(bw, 0),
         c + Vector2(bw * 0.55, -96.0), c + Vector2(-bw * 0.55, -96.0)]),
         Color(C_EXIT_ON.r, C_EXIT_ON.g, C_EXIT_ON.b, 0.16))
+    else:
+      # sealed door — no glow, so a closed exit clearly reads as closed
+      _blit("door_closed", c)
 
 func _draw_wall(cell: Vector2i) -> void:
   var sname: String = decor.get(cell, "wall")   # mossy/cracked/crystal/brazier variants are full blocks
