@@ -2,11 +2,17 @@ extends Node2D
 ## ECHO CHAMBER — 2D isometric temporal-puzzle prototype.
 ## Worn overgrown-tower look; "motion record" mechanic.
 ##
-## Turn-based, deterministic lockstep. HOLD SPACE to record a ghost: while held you walk
-## (through walls — you are phasing), each step recorded. RELEASE to bank the ghost and snap
-## back to start; it replays your exact path in lockstep with your future moves. Stack ghosts
-## to hold switches simultaneously; the exit opens when all switches are held — then walk onto
-## it. When NOT recording you are solid: walls block you and spike pits kill you.
+## Turn-based, deterministic lockstep. Two-step "record then deploy" model:
+##   1. HOLD SPACE to RECORD a gesture: while held you walk (through walls — you are phasing),
+##      each step recorded as a relative shape. RELEASE to BANK that shape into a reusable
+##      clipboard (gesture_deltas) and snap back — this does NOT spawn a ghost. Re-recording
+##      replaces the clipboard.
+##   2. Walk anywhere, then press E (deploy/echo) to STAMP a ghost at your CURRENT cell that
+##      traces the recorded shape from there. Deploying does NOT consume the clipboard — stamp
+##      the same shape from as many positions as you like.
+## Ghosts replay in lockstep with your future moves and freeze on their last step (holding a
+## switch). Stack ghosts to hold switches simultaneously; the exit opens when all switches are
+## held — then walk onto it. When NOT recording you are solid: walls block, spike pits kill.
 
 # ---- Tunable game-feel knobs ----
 @export var tile_w: int = 112
@@ -146,6 +152,9 @@ var tick := 0
 var player_cell := Vector2i.ZERO
 var rec_anchor := Vector2i.ZERO   # cell where the player pressed SPACE to start recording
 var current_path: Array = []
+var gesture_deltas: Array = []    # CLIPBOARD: last recorded gesture as relative deltas (deltas[0]==(0,0)).
+                                  # Empty = nothing recorded. Filled on release SPACE, stamped by _deploy().
+                                  # Persists across death/reset; cleared only on load_level (a fresh level).
 var echoes: Array = []
 var pressed_plates := {}
 var exit_open := false
@@ -255,7 +264,7 @@ func _build_hud() -> void:
   help = _mklabel(cl, 16, Color("d7e2d0"), 5, HORIZONTAL_ALIGNMENT_LEFT)
   help.position = Vector2(24, 52); help.size = Vector2(720, 200)
   help.visible = false
-  help.text = "CONTROLS\nMove: Arrows / WASD\nHold SPACE: record a ghost (walk through walls) — release to bank it\nR / T: reset level    N: next (after solving)\nF11: fullscreen    Esc: title    H: hide help"
+  help.text = "CONTROLS\nMove: Arrows / WASD\nHold SPACE: record a gesture (walk through walls) — release to bank it as a reusable shape\nE: deploy — stamp a ghost at your position that traces the banked gesture (stamp from anywhere, as often as you like)\nRe-record (hold SPACE again) to replace the banked gesture.\nR / T: reset level    N: next (after solving)\nF11: fullscreen    Esc: title    H: hide help"
   banner = _mklabel(cl, 38, Color("ffe9a8"), 8, HORIZONTAL_ALIGNMENT_CENTER)
   banner.position = Vector2(0, 300); banner.size = Vector2(1280, 60)
   banner.visible = false
@@ -306,6 +315,7 @@ func load_level(idx: int) -> void:
   var vp := get_viewport_rect().size
   board_offset = vp * 0.5 - raw + Vector2(0, -wall_height * 0.5 + 24)
   echoes.clear()
+  gesture_deltas.clear()   # fresh level: forget the recorded gesture (it persists across death, NOT load)
   _restart_attempt()
   _show_title()
 
@@ -354,23 +364,37 @@ func _begin_record() -> void:
   _update_hud()
 
 func _end_record() -> void:
+  # RECORD now only BANKS a reusable clipboard shape — it does NOT spawn a ghost. The recorded
+  # cells are stored as RELATIVE deltas from rec_anchor (deltas[0] == (0,0)). Later, _deploy()
+  # stamps a ghost at the player's current cell that traces these deltas from there. So the same
+  # shape can be stamped from many positions, and re-recording replaces the clipboard.
   if current_path.size() > 1:
-    # Store the gesture as a RELATIVE shape: deltas from the cell it was recorded at.
-    # The ghost is anchored to the player's CURRENT cell (rec_anchor = where you stand
-    # right now) and traces deltas[] from there. Recording the same gesture from a
-    # different spot lands the ghost in a different place — anchor + deltas, not fixed
-    # world cells. start_tick = current tick so the ghost starts at the anchor right now
-    # and advances one step per player action, freezing on its last delta.
     var deltas: Array = []
     for c in current_path:
       deltas.append((c as Vector2i) - rec_anchor)
-    echoes.append({"anchor": rec_anchor, "deltas": deltas, "start_tick": tick})
-    message = "Ghost %d recorded." % echoes.size()
+    gesture_deltas = deltas
+    message = "Gesture banked (%d steps). Walk somewhere, press E to deploy." % (deltas.size() - 1)
   else:
-    message = "Nothing recorded."
-  # Snap player back to where they were when they pressed SPACE — no level reset.
+    message = "Nothing recorded — hold SPACE and walk to record a gesture."
+  # Snap player back to where they were when they pressed SPACE — no level reset, no ghost.
   player_cell = rec_anchor
   mode = Mode.PLAY
+  _snap_positions()
+  _update_state()
+  _update_hud()
+
+func _deploy() -> void:
+  # STAMP a ghost at the player's CURRENT cell tracing the banked clipboard shape from here.
+  # anchor = player_cell (where you stand now), deltas = the clipboard (copied so re-recording
+  # later can't mutate already-deployed ghosts), start_tick = tick so the ghost spawns under you
+  # this instant and advances one delta per future player action, freezing on its last delta.
+  # Does NOT consume the clipboard — stamp the same shape from as many spots as you like.
+  if gesture_deltas.size() < 2:
+    message = "Nothing recorded yet — hold SPACE and walk to record a gesture first."
+    _update_hud()
+    return
+  echoes.append({"anchor": player_cell, "deltas": gesture_deltas.duplicate(), "start_tick": tick})
+  message = "Ghost %d deployed." % echoes.size()
   _snap_positions()
   _update_state()
   _update_hud()
@@ -417,6 +441,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
       get_tree().change_scene_to_file("res://start_screen.tscn"); return
   if won or busy:
     return
+  # E = deploy/echo: stamp a ghost of the banked gesture at the player's current cell.
+  if k == KEY_E and mode == Mode.PLAY:
+    _deploy(); return
   match k:
     KEY_UP, KEY_W: _move(Vector2i(0, -1))
     KEY_RIGHT, KEY_D: _move(Vector2i(1, 0))
@@ -685,24 +712,48 @@ func _draw_paths() -> void:
     _draw_trace(abs_path, Color(C_GHOST.r, C_GHOST.g, C_GHOST.b, 0.24), 2.0)
   if mode == Mode.RECORD and current_path.size() > 1:
     _draw_trace(current_path, Color(C_GHOST.r, C_GHOST.g, C_GHOST.b, 0.9), 3.0)
+  elif mode == Mode.PLAY and not won and gesture_deltas.size() >= 2:
+    _draw_deploy_preview()
+
+func _draw_deploy_preview() -> void:
+  # Faint preview of where a deploy (E) would land: dotted shape anchored at the player's
+  # CURRENT cell, plus a translucent ghost outline on its last delta (where the ghost freezes).
+  var preview: Array = []
+  for d in gesture_deltas:
+    preview.append(player_cell + (d as Vector2i))
+  _draw_trace(preview, Color(C_PHASE_RING.r, C_PHASE_RING.g, C_PHASE_RING.b, 0.30), 2.0)
+  var landing: Vector2i = preview[preview.size() - 1]
+  var lp := _surface(landing)
+  # Reuse the ghost silhouette at low alpha so the player can read the resting pose.
+  var ga := echo_alpha
+  echo_alpha = 0.20
+  _draw_pawn(lp, 2)
+  echo_alpha = ga
 
 # ---- Minimal HUD ----
 func _update_hud() -> void:
+  var has_gesture := gesture_deltas.size() >= 2
   if plates.size() > 0:
     var pc := 0
     for p in plates:
       if pressed_plates.get(p, false):
         pc += 1
     status.text = "switches %d/%d    ghosts %d" % [pc, plates.size(), echoes.size()]
+    if has_gesture:
+      status.text += "    [gesture ready · E]"
     status.visible = true
   else:
     status.text = "ghosts %d" % echoes.size()
-    status.visible = echoes.size() > 0
+    if has_gesture:
+      status.text += "    [gesture ready · E]"
+    status.visible = echoes.size() > 0 or has_gesture
   var base := ""
   if mode == Mode.RECORD:
-    base = "● RECORDING  —  walk through walls  ·  release SPACE to leave a ghost"
+    base = "● RECORDING  —  walk through walls  ·  release SPACE to bank the gesture"
+  elif has_gesture:
+    base = "Press E to deploy a ghost at your position     ·     hold SPACE to re-record     ·     H help"
   else:
-    base = "Hold SPACE to record a ghost     ·     H help"
+    base = "Hold SPACE and walk to record a gesture     ·     H help"
   if message != "":
     base = message + "        " + base
   prompt.text = base
