@@ -29,7 +29,8 @@ extends Node2D
 # height band tints its floor a step brighter and a subtle ledge line is drawn on the downhill edges
 # of a raised cell. All current levels are height 0 (flat), so this stays invisible until a level
 # actually populates `heights` — it exists and is correct, just not exercised yet.
-@export var elev_tint_step: float = 0.09   # per-height-band floor brightening (kept subtle)
+@export var elev_tint_step: float = 0.17   # per-height-band floor brightening (raised from 0.09: at
+                                           # 0.09 the bands were indistinguishable in playtest screenshots)
 
 # ---- Palette (worn overgrown tower) ----
 const C_FLOOR := Color("9ea08d")
@@ -366,6 +367,80 @@ var levels := [
     "decor": [
       [Vector2i(2, 1), "td_crystal"], [Vector2i(10, 1), "td_ferns"],
       [Vector2i(2, 8), "td_mushrooms"], [Vector2i(10, 8), "td_rubble"],
+    ],
+  },
+  # ===== TIER D — precision & scale (15-17) =====
+  {
+    "name": "The Ledge Run",
+    "hint": "A spike chasm cuts the low ground from the high walk. Only the far slope rises step by step — climb it, then plant your echoes on the two spires the walk can't touch.",
+    # MULTIPLE height bands. Low ground (row 5, h0) and the high bridge (row 2, h3) are split by a two-
+    # row spike moat; the ONLY crossing is the ramp column x=11 rising 0->1->2->3 (each step climbable).
+    # S1 (3,1) and S2 (8,1) are h5 spires above the h3 bridge — +2, so only phasing ghosts rest there,
+    # via two different reaches (up1, and an L). Load-bearing: without the climb the bridge is a h3 cliff.
+    "rows": [
+      "#############",
+      "###1####2####",
+      "#E..........#",
+      "#^^^^^^^^^^.#",
+      "#^^^^^^^^^^.#",
+      "#P..........#",
+      "#############",
+      "#############"],
+    "heights": [
+      "0000000000000",
+      "0005000050000",
+      "3333333333330",
+      "0000000000020",
+      "0000000000010",
+      "0000000000000",
+      "0000000000000",
+      "0000000000000"],
+    "decor": [
+      [Vector2i(2, 6), "td_crystal"], [Vector2i(10, 6), "td_ferns"],
+      [Vector2i(4, 7), "td_mushrooms"], [Vector2i(8, 7), "td_rubble"],
+    ],
+  },
+  {
+    "name": "Narrow Margins",
+    "hint": "The door is a breath away from where you plant the last echo — but that echo has the whole hall to climb. Rush it and you arrive alone. Take the long road.",
+    # PURE TIMING. S2 (5,1) is deep: its ghost needs 7 ticks to crawl up. Deploying it from (5,8) leaves
+    # the exit (7,8) only 2 steps away, so the naive dash arrives 5 ticks early (see the NAIVE _verify
+    # case, won=false). The winning run loops the room to burn ticks. S1 (1,4) is a quick left-reach.
+    "rows": [
+      "###########",
+      "#####2#####",
+      "###########",
+      "###########",
+      "#1#.......#",
+      "###.......#",
+      "###.......#",
+      "###.......#",
+      "###P...E..#",
+      "###########"],
+    "decor": [
+      [Vector2i(9, 4), "td_crystal"], [Vector2i(9, 6), "td_ferns"],
+      [Vector2i(4, 7), "td_mushrooms"], [Vector2i(8, 4), "td_rubble"],
+    ],
+  },
+  {
+    "name": "The Foundry",
+    "hint": "Four switches scattered off one long gallery, no two at the same reach. Read them all before you bank a thing — two share a mold, two do not.",
+    # NON-SYMMETRIC read-the-room test. Only the gallery (row 5) is walkable. S1 (2,3) & S2 (6,3) sit
+    # two up (SAME shape, stamped twice); S3 (10,1) is four up; S4 (12,7) is two DOWN. Four switches,
+    # three distinct banked shapes (up2 x2, up4, down2). Verified solvable (margins 17/13/3/1).
+    "rows": [
+      "#################",
+      "##########3######",
+      "#################",
+      "##1###2##########",
+      "#################",
+      "#P.............E#",
+      "#################",
+      "############4####",
+      "#################"],
+    "decor": [
+      [Vector2i(4, 1), "td_crystal"], [Vector2i(14, 1), "td_ferns"],
+      [Vector2i(3, 7), "td_mushrooms"], [Vector2i(14, 7), "td_rubble"],
     ],
   },
 ]
@@ -1019,9 +1094,11 @@ func _draw_ledges() -> void:
         continue
       var mid := c + Vector2(d.x, d.y) * half
       var perp := Vector2(-d.y, d.x) * half
-      draw_line(mid - perp, mid + perp, Color(0, 0, 0, 0.30), maxf(2.0, _ts * 0.06))
-      var inw := Vector2(d.x, d.y) * (_ts * 0.06)
-      draw_line(mid - perp - inw, mid + perp - inw, Color(1, 1, 1, 0.10), maxf(1.0, _ts * 0.03))
+      # Stronger than the original 0.30/0.10: a dark drop-shadow line on the downhill edge plus a lit
+      # lip just inside the higher cell, so a raised tier reads clearly against the busy floor texture.
+      draw_line(mid - perp, mid + perp, Color(0, 0, 0, 0.55), maxf(3.0, _ts * 0.09))
+      var inw := Vector2(d.x, d.y) * (_ts * 0.07)
+      draw_line(mid - perp - inw, mid + perp - inw, Color(1, 1, 1, 0.24), maxf(2.0, _ts * 0.04))
 
 # Draw every pawn: ghosts (kind 2) plus the player (kind 0 PLAY / 1 RECORD). When several pawns
 # share a logical cell they'd overlap exactly, so stagger them on a small deterministic radial ring

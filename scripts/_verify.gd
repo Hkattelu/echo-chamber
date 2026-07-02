@@ -132,6 +132,44 @@ var CASES := [
     ["rec"], ["mv",-1,0,3], ["end"], ["dep"],
     ["rec"], ["mv",-1,0,3], ["end"], ["dep"],
     ["mv",0,1,4]]},
+
+  # ===== TIER D (levels 15-17, indices 14-16) =====
+
+  # L15: cross the ground, CLIMB the ramp 0-1-2-3 to the bridge, plant two ghosts on the h5 spires, exit.
+  {"level": 14, "name": "L15 Ledge Run (SOLVE, climb + 2 shapes)", "expect_won": true, "steps": [
+    ["mv",1,0,10],
+    ["mv",0,-1,3],
+    ["mv",-1,0,5],
+    ["rec"], ["mv",1,0,2], ["mv",0,-1,1], ["end"], ["dep"],
+    ["mv",-1,0,3],
+    ["rec"], ["mv",0,-1,1], ["end"], ["dep"],
+    ["mv",-1,0,2]]},
+
+  # L16: plant the quick left ghost, plant the deep up7 ghost near the door, then LOOP to buy it time.
+  {"level": 15, "name": "L16 Narrow Margins (SOLVE, detour)", "expect_won": true, "steps": [
+    ["mv",0,-1,4],
+    ["rec"], ["mv",-1,0,2], ["end"], ["dep"],
+    ["mv",0,1,4], ["mv",1,0,2],
+    ["rec"], ["mv",0,-1,7], ["end"], ["dep"],
+    ["mv",0,-1,4], ["mv",1,0,2], ["mv",0,1,4]]},
+  # NAIVE FAST ROUTE: dash the 2 steps straight to the door — the deep ghost is still 5 ticks out.
+  {"level": 15, "name": "L16 Narrow Margins (NAIVE fast route)", "expect_won": false, "steps": [
+    ["mv",0,-1,4],
+    ["rec"], ["mv",-1,0,2], ["end"], ["dep"],
+    ["mv",0,1,4], ["mv",1,0,2],
+    ["rec"], ["mv",0,-1,7], ["end"], ["dep"],
+    ["mv",1,0,2]]},
+
+  # L17: 4 switches, 3 shapes. up2 is banked once and stamped on S1 AND S2; then up4 (S3), down2 (S4).
+  {"level": 16, "name": "L17 The Foundry (SOLVE, 3 shapes / 4 switches)", "expect_won": true, "steps": [
+    ["mv",1,0,1],
+    ["rec"], ["mv",0,-1,2], ["end"], ["dep"],
+    ["mv",1,0,4], ["dep"],
+    ["mv",1,0,4],
+    ["rec"], ["mv",0,-1,4], ["end"], ["dep"],
+    ["mv",1,0,2],
+    ["rec"], ["mv",0,1,2], ["end"], ["dep"],
+    ["mv",1,0,3]]},
 ]
 
 var _lines: Array = []
