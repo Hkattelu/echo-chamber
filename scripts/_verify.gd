@@ -41,6 +41,34 @@ var CASES := [
     ["mv",1,0,4], ["dep"],
     ["mv",0,1], ["mv",-1,0,2], ["mv",0,1,2]]},
 
+  {"level": 4, "name": "L5 Chorus", "expect_won": true, "steps": [
+    ["mv",0,1], ["mv",-1,0,3], ["rec"], ["mv",0,1], ["mv",0,1], ["end"], ["dep"],
+    ["mv",1,0,4], ["dep"],
+    ["mv",1,0,4], ["dep"],
+    ["mv",-1,0,2], ["mv",0,1,4], ["mv",-1,0,3], ["mv",0,1]]},
+
+  {"level": 5, "name": "L6 Sealed Gauntlet", "expect_won": true, "steps": [
+    ["mv",0,1], ["mv",1,0,3], ["rec"], ["mv",0,1], ["mv",0,1], ["end"], ["dep"],
+    ["mv",-1,0,3], ["mv",0,1,4], ["mv",1,0,3], ["mv",0,1,2]]},
+
+  {"level": 6, "name": "L7 The Long Way (SHORT route)", "expect_won": false, "steps": [
+    ["rec"], ["mv",1,0,6], ["mv",0,-1,6], ["end"], ["dep"], ["mv",1,0,2]]},
+
+  {"level": 6, "name": "L7 The Long Way (LONG route)", "expect_won": true, "steps": [
+    ["rec"], ["mv",1,0,6], ["mv",0,-1,6], ["end"], ["dep"],
+    ["mv",0,-1,6], ["mv",1,0,6], ["mv",0,1,6], ["mv",-1,0,4]]},
+
+  {"level": 7, "name": "L8 Off-Center (NAIVE anchor)", "expect_won": false, "steps": [
+    ["rec"], ["mv",0,1], ["mv",0,1], ["end"], ["mv",0,1], ["dep"],
+    ["mv",-1,0,3], ["mv",0,1,4], ["mv",1,0,3], ["mv",0,1]]},
+
+  {"level": 7, "name": "L8 Off-Center (CORRECT anchor)", "expect_won": true, "steps": [
+    ["rec"], ["mv",0,1], ["mv",0,1], ["end"], ["mv",0,1], ["mv",-1,0], ["dep"],
+    ["mv",-1,0,2], ["mv",0,1,4], ["mv",1,0,3], ["mv",0,1]]},
+
+  {"level": 8, "name": "L9 Crossroads Refined", "expect_won": true, "steps": [
+    ["mv",1,0,4], ["mv",0,1], ["rec"], ["mv",0,1], ["mv",0,1], ["mv",0,1], ["mv",0,1], ["end"], ["dep"],
+    ["mv",0,-1], ["mv",1,0,4]]},
 ]
 
 var _lines: Array = []

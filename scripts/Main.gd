@@ -151,6 +151,98 @@ var levels := [
       [Vector2i(4, 1), "td_brazier"],
     ],
   },
+  {
+    "name": "Chorus",
+    "hint": "Three switches, boxed by the same mold. Bank one reach and it will fit them all.",
+    "rows": [
+      "#############",
+      "#.....P.....#",
+      "#...........#",
+      "#.###.###.###",
+      "#.#1#.#2#.#3#",
+      "#.###.###.###",
+      "#...........#",
+      "#.....E.....#",
+      "#############"],
+    "decor": [
+      [Vector2i(1, 1), "td_crystal"], [Vector2i(11, 1), "td_ferns"],
+      [Vector2i(1, 6), "td_mushrooms"], [Vector2i(11, 6), "td_rubble"],
+      [Vector2i(2, 1), "td_brazier"],
+    ],
+  },
+  {
+    "name": "Sealed Gauntlet",
+    "hint": "The switch is walled in and the floor bites back. Record your way inside, then find the one safe seam to the door.",
+    "rows": [
+      "#########",
+      "#P......#",
+      "#.......#",
+      "#.#####.#",
+      "#.#.1.#.#",
+      "#.#####.#",
+      "#.......#",
+      "#^^^.^^^#",
+      "#...E...#",
+      "#########"],
+    "decor": [
+      [Vector2i(7, 1), "td_crystal"], [Vector2i(7, 2), "td_ferns"],
+      [Vector2i(2, 1), "td_mushrooms"], [Vector2i(6, 2), "td_rubble"],
+    ],
+  },
+  {
+    "name": "The Long Way",
+    "hint": "The door is only a few steps away — but your echo has a long road to walk. Don't leave before it arrives.",
+    "rows": [
+      "#########",
+      "#......1#",
+      "#.#####.#",
+      "#.#####.#",
+      "#.#####.#",
+      "#.#####.#",
+      "#.#####.#",
+      "#P.E....#",
+      "#########"],
+    "decor": [
+      [Vector2i(4, 1), "td_crystal"], [Vector2i(1, 4), "td_ferns"],
+      [Vector2i(7, 4), "td_mushrooms"], [Vector2i(5, 7), "td_rubble"],
+    ],
+  },
+  {
+    "name": "Off-Center",
+    "hint": "A shape lands cell-for-cell from where you deploy — the ghost stops exactly where your steps say, not merely close. Line it up.",
+    "rows": [
+      "###########",
+      "#....P....#",
+      "#.........#",
+      "#...###...#",
+      "#..#1..#..#",
+      "#...###...#",
+      "#.........#",
+      "#....E....#",
+      "###########"],
+    "decor": [
+      [Vector2i(1, 1), "td_crystal"], [Vector2i(9, 1), "td_ferns"],
+      [Vector2i(1, 6), "td_mushrooms"], [Vector2i(9, 6), "td_rubble"],
+    ],
+  },
+  {
+    "name": "Crossroads, Refined",
+    "hint": "Spikes and walls both yield to your echo but not to you. Send one straight through — and be sure you've walked far enough before you reach the door.",
+    "rows": [
+      "###########",
+      "#P.......E#",
+      "#.........#",
+      "#^^^^^^^^^#",
+      "#.........#",
+      "#...###...#",
+      "#...#1#...#",
+      "#...###...#",
+      "###########"],
+    "decor": [
+      [Vector2i(2, 1), "td_crystal"], [Vector2i(7, 1), "td_ferns"],
+      [Vector2i(1, 7), "td_mushrooms"], [Vector2i(9, 7), "td_rubble"],
+    ],
+  },
 ]
 
 const ROMAN := ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII"]
