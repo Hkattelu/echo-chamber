@@ -11,8 +11,7 @@ const C_PLAYER := Color("d98a52")
 const C_GHOST := Color("8a78bf")
 const C_TEAL := Color("4fe0da")
 
-const TILE_W := 96.0
-const TILE_H := 48.0
+const TILE := 84.0   # flat top-down cell edge for the title hero shot
 
 # New PixelLab character sprites (idle facing only) for the hero shot — see Main.gd.
 const CHAR_ANCHOR := Vector2(34, 58)   # foot point in the 68px character canvas
@@ -83,13 +82,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and event.pressed:
 		get_tree().change_scene_to_file("res://main.tscn")
 
-func _iso(cell: Vector2, origin: Vector2) -> Vector2:
-	return Vector2((cell.x - cell.y) * TILE_W * 0.5, (cell.x + cell.y) * TILE_H * 0.5) + origin
+func _cell(cell: Vector2, origin: Vector2) -> Vector2:
+	return cell * TILE + origin
 
-func _diamond(c: Vector2, w: float, h: float) -> PackedVector2Array:
-	return PackedVector2Array([
-		c + Vector2(0, -h * 0.5), c + Vector2(w * 0.5, 0),
-		c + Vector2(0, h * 0.5), c + Vector2(-w * 0.5, 0)])
+func _sq(c: Vector2, edge: float) -> Rect2:
+	return Rect2(c - Vector2(edge, edge) * 0.5, Vector2(edge, edge))
 
 func _pawn(pos: Vector2, col: Color, a: float) -> void:
 	var c := Color(col.r, col.g, col.b, a)
@@ -133,26 +130,24 @@ func _draw_char(pos: Vector2, ghost: bool, alpha: float) -> void:
 func _draw() -> void:
 	var vp := get_viewport_rect().size
 	draw_texture_rect(bg_tex, Rect2(Vector2.ZERO, vp), false)
-	var origin := Vector2(vp.x * 0.5, vp.y * 0.5 + 70)
-	for sx in range(-6, 7):
-		for sy in range(-5, 6):
-			var c := _iso(Vector2(sx, sy), origin)
-			var d := _diamond(c, TILE_W, TILE_H)
+	var origin := Vector2(vp.x * 0.5, vp.y * 0.5 + 96)
+	# faint flat square-tile surround, fading out from the centre (replaces the old iso diamonds)
+	for sx in range(-7, 8):
+		for sy in range(-4, 5):
 			var dist := Vector2(sx, sy).length()
-			var a: float = clampf(0.16 - dist * 0.012, 0.0, 0.16)
+			var a: float = clampf(0.16 - dist * 0.013, 0.0, 0.16)
 			if a > 0.0:
-				draw_colored_polygon(d, Color(C_FLOOR.r, C_FLOOR.g, C_FLOOR.b, a))
+				draw_rect(_sq(_cell(Vector2(sx, sy), origin), TILE), Color(C_FLOOR.r, C_FLOOR.g, C_FLOOR.b, a))
+	# a small solid platform under the hero shot
 	var plat := [Vector2(-1, 0), Vector2(0, 0), Vector2(1, 0),
 		Vector2(-1, 1), Vector2(0, 1), Vector2(1, 1)]
 	for cell in plat:
-		var c := _iso(cell, origin)
-		var d := _diamond(c, TILE_W, TILE_H)
-		draw_colored_polygon(d, C_FLOOR)
-		var ol := d.duplicate(); ol.append(d[0])
-		draw_polyline(ol, C_FLOOR_EDGE, 2.0)
-	# Hero shot: player front-and-centre, two translucent echoes peeking from behind.
-	# Drawn back-to-front (echoes first, player last) so the player reads clearly on top.
+		var r := _sq(_cell(cell, origin), TILE)
+		draw_rect(r, C_FLOOR)
+		draw_rect(r, C_FLOOR_EDGE, false, 2.0)
+	# Hero shot: player front-and-centre, two translucent echoes behind. Drawn back-to-front
+	# (echoes first, player last) so the player reads clearly on top.
 	var bob := sin(_t * 2.0) * 3.0
-	_draw_char(_iso(Vector2(0, 1), origin) + Vector2(0, -2 + bob), true, 0.6)
-	_draw_char(_iso(Vector2(1, 0), origin) + Vector2(0, -2 - bob), true, 0.6)
-	_draw_char(_iso(Vector2(1, 1), origin) + Vector2(0, -2), false, 1.0)
+	_draw_char(_cell(Vector2(-1, 0), origin) + Vector2(0, -2 + bob), true, 0.6)
+	_draw_char(_cell(Vector2(1, 0), origin) + Vector2(0, -2 - bob), true, 0.6)
+	_draw_char(_cell(Vector2(0, 1), origin) + Vector2(0, -2), false, 1.0)
