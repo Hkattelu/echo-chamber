@@ -10,6 +10,9 @@ export_presets.cfg
 *.exe
 *.pck
 
+# Headless verify harness output (regenerated artifact)
+_verify_results.txt
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db
