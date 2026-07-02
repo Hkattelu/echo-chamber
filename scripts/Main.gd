@@ -243,9 +243,135 @@ var levels := [
       [Vector2i(1, 7), "td_mushrooms"], [Vector2i(9, 7), "td_rubble"],
     ],
   },
+  # ===== TIER C — multi-shape mastery (10-14): the clipboard is replaced mid-level, so a
+  #       single banked gesture can no longer cover every switch. =====
+  {
+    "name": "Two Shapes",
+    "hint": "One switch sits high, the other low — a single reach can't touch both ends of the room. Bank one shape, then bank another.",
+    # Reachable ground is the single corridor row. S1 is 3 rows ABOVE it, S2 3 rows BELOW: their
+    # required vertical offsets are opposite, so NO one gesture lands on both (proven forcing).
+    "rows": [
+      "###########",
+      "#####1#####",
+      "###########",
+      "###########",
+      "#P.......E#",
+      "###########",
+      "###########",
+      "#####2#####",
+      "###########"],
+    "decor": [
+      [Vector2i(1, 1), "td_crystal"], [Vector2i(9, 1), "td_ferns"],
+      [Vector2i(1, 7), "td_mushrooms"], [Vector2i(9, 7), "td_rubble"],
+    ],
+  },
+  {
+    "name": "Order Matters",
+    "hint": "Two switches on opposite walls, each wanting its own reach — and the far one is slow to arrive. Plant the patient ghost before you double back.",
+    # One narrow column is all you can stand on. S1 is 4 cells LEFT, S2 is 4 cells RIGHT — opposite
+    # offsets, so two banked shapes are unavoidable. The deep ghost must be stamped first or it never
+    # reaches its plate in time: a there-and-back route, not a single sweep.
+    "rows": [
+      "###########",
+      "#####P#####",
+      "#####.#####",
+      "#1###.#####",
+      "#####.#####",
+      "#####.#####",
+      "#####.#####",
+      "#####.###2#",
+      "#####.#####",
+      "#####E#####",
+      "###########"],
+    "decor": [
+      [Vector2i(2, 1), "td_crystal"], [Vector2i(8, 1), "td_ferns"],
+      [Vector2i(2, 9), "td_mushrooms"], [Vector2i(8, 9), "td_rubble"],
+    ],
+  },
+  {
+    "name": "The Vault Above",
+    "hint": "Two switches perch on shelves a stride too tall to climb — an echo never had to obey the height. The door itself sits high: find the slope that lets you rise, not the wall that won't.",
+    # ELEVATION is load-bearing here. S1 (4,2) and S2 (2,5) are open floor but height 2: a solid step
+    # up is +2 (over max_climb=1), so only a phasing-recorded ghost can rest on them. The EXIT (9,6)
+    # is height 2 and reachable ONLY by the climbable ramp 0->1->2 at (7,6)->(8,6)->(9,6); every other
+    # approach to it is a +2 cliff the player cannot mount. (See the two _verify cases: the winning run
+    # climbs the ramp; the blocked run reaches (9,5) beside the door but cannot step up the cliff.)
+    "rows": [
+      "###########",
+      "#P........#",
+      "#...1.....#",
+      "#.........#",
+      "#.........#",
+      "#.2.......#",
+      "#........E#",
+      "#.........#",
+      "###########"],
+    "heights": [
+      "00000000000",
+      "00000000000",
+      "00002000000",
+      "00000000000",
+      "00000000000",
+      "00200000000",
+      "00000001220",
+      "00000000000",
+      "00000000000"],
+    "decor": [
+      [Vector2i(7, 1), "td_crystal"], [Vector2i(1, 7), "td_ferns"],
+      [Vector2i(5, 7), "td_mushrooms"], [Vector2i(8, 3), "td_rubble"],
+    ],
+  },
+  {
+    "name": "Three Shapes",
+    "hint": "Three switches, three heights above and below the aisle — no single reach spans them. Bank three gestures, and mind the pit that splits the floor.",
+    # Only the two-row aisle (rows 5-6) is standing ground; a spike pit bites the middle of row 6, so
+    # the player weaves up to row 5 to cross. The three sealed switches sit at rows 1, 3 and 9 — far
+    # enough apart that their required offsets never overlap, forcing THREE distinct banked shapes
+    # (up4, an L, down4). Verified solvable (margins 13/7/1).
+    "rows": [
+      "#############",
+      "#####1#######",
+      "#############",
+      "#########2###",
+      "#############",
+      "#...........#",
+      "#P...^^^...E#",
+      "#############",
+      "#############",
+      "###3#########",
+      "#############"],
+    "decor": [
+      [Vector2i(2, 1), "td_crystal"], [Vector2i(10, 1), "td_ferns"],
+      [Vector2i(1, 7), "td_mushrooms"], [Vector2i(11, 7), "td_rubble"],
+    ],
+  },
+  {
+    "name": "The Divide",
+    "hint": "A mirror-perfect hall, a sealed switch on either flank. The temptation is to bank one reach and echo it both ways — but a deployed shape only slides, it never flips.",
+    # LOOKS symmetric, ISN'T solvable by mirroring. The only footing is the 1-wide column x=6, so a
+    # left-reaching gesture ALWAYS rests to the left, no matter where you stand — repeating it can
+    # never reach the right switch. You must bank the reach AND its true opposite (left3 then right3).
+    # The naive "same gesture twice" case proves it fails (both ghosts pile on S1).
+    "rows": [
+      "#############",
+      "######P######",
+      "######.######",
+      "######.######",
+      "###1##.##2###",
+      "######.######",
+      "######.######",
+      "######.######",
+      "######E######",
+      "#############"],
+    "decor": [
+      [Vector2i(2, 1), "td_crystal"], [Vector2i(10, 1), "td_ferns"],
+      [Vector2i(2, 8), "td_mushrooms"], [Vector2i(10, 8), "td_rubble"],
+    ],
+  },
 ]
 
-const ROMAN := ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII"]
+const ROMAN := ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
+  "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX"]
 func _roman(n: int) -> String:
   return ROMAN[n] if n >= 0 and n < ROMAN.size() else str(n + 1)
 

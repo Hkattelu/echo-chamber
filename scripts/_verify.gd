@@ -69,6 +69,69 @@ var CASES := [
   {"level": 8, "name": "L9 Crossroads Refined", "expect_won": true, "steps": [
     ["mv",1,0,4], ["mv",0,1], ["rec"], ["mv",0,1], ["mv",0,1], ["mv",0,1], ["mv",0,1], ["end"], ["dep"],
     ["mv",0,-1], ["mv",1,0,4]]},
+
+  # ===== TIER C (levels 10-14, indices 9-13) — TWO+ distinct recorded shapes required =====
+
+  # L10 needs an L-shape (right2,up3) for the high switch and a straight (down3) for the low one.
+  {"level": 9, "name": "L10 Two Shapes (SOLVE, 2 shapes)", "expect_won": true, "steps": [
+    ["mv",1,0,2],
+    ["rec"], ["mv",1,0,2], ["mv",0,-1,3], ["end"], ["dep"],
+    ["mv",1,0,2],
+    ["rec"], ["mv",0,1,3], ["end"], ["dep"],
+    ["mv",1,0,4]]},
+  # NAIVE: bank ONE shape (the L) and stamp it twice — the second ghost lands on a wall, not S2.
+  {"level": 9, "name": "L10 Two Shapes (NAIVE single shape)", "expect_won": false, "steps": [
+    ["mv",1,0,2],
+    ["rec"], ["mv",1,0,2], ["mv",0,-1,3], ["end"], ["dep"],
+    ["mv",1,0,2], ["dep"],
+    ["mv",1,0,4]]},
+
+  # L11: go DEEP first, plant the slow ghost (right4), climb back, plant the near ghost (left4), exit.
+  {"level": 10, "name": "L11 Order Matters (SOLVE, 2 shapes)", "expect_won": true, "steps": [
+    ["mv",0,1,6],
+    ["rec"], ["mv",1,0,4], ["end"], ["dep"],
+    ["mv",0,-1,4],
+    ["rec"], ["mv",-1,0,4], ["end"], ["dep"],
+    ["mv",0,1,6]]},
+
+  # L12 elevation: ghosts hold the two height-2 shelf switches; the player must CLIMB the ramp to exit.
+  {"level": 11, "name": "L12 Vault Above (SOLVE, 2 shapes + climb)", "expect_won": true, "steps": [
+    ["mv",0,1,2], ["mv",1,0,3],
+    ["rec"], ["mv",0,-1,1], ["end"], ["dep"],
+    ["mv",0,1,2],
+    ["rec"], ["mv",-1,0,2], ["end"], ["dep"],
+    ["mv",1,0,2], ["mv",0,1,1], ["mv",1,0,3]]},
+  # BLOCKED: both switches are held, but reaching the exit from the flat side is a +2 cliff. The player
+  # ends at (9,5) right beside the door and cannot step up — proving the height is load-bearing.
+  {"level": 11, "name": "L12 Vault Above (BLOCKED cliff, no climb)", "expect_won": false, "steps": [
+    ["mv",0,1,2], ["mv",1,0,3],
+    ["rec"], ["mv",0,-1,1], ["end"], ["dep"],
+    ["mv",0,1,2],
+    ["rec"], ["mv",-1,0,2], ["end"], ["dep"],
+    ["mv",1,0,5], ["mv",0,1,1]]},
+
+  # L13: three switches at three rows -> three banked shapes (down4, up4, L). Aisle row 5 dodges the pit.
+  {"level": 12, "name": "L13 Three Shapes (SOLVE, 3 shapes)", "expect_won": true, "steps": [
+    ["mv",0,-1,1], ["mv",1,0,2],
+    ["rec"], ["mv",0,1,4], ["end"], ["dep"],
+    ["mv",1,0,2],
+    ["rec"], ["mv",0,-1,4], ["end"], ["dep"],
+    ["mv",1,0,2],
+    ["rec"], ["mv",1,0,2], ["mv",0,-1,2], ["end"], ["dep"],
+    ["mv",1,0,4], ["mv",0,1,1]]},
+
+  # L14: bank the reach AND its true mirror (left3 then right3), deploy both from the column, exit.
+  {"level": 13, "name": "L14 The Divide (SOLVE, shape + mirror)", "expect_won": true, "steps": [
+    ["mv",0,1,3],
+    ["rec"], ["mv",-1,0,3], ["end"], ["dep"],
+    ["rec"], ["mv",1,0,3], ["end"], ["dep"],
+    ["mv",0,1,4]]},
+  # NAIVE MIRROR: bank the SAME left reach twice — both ghosts land on the left switch, right stays open.
+  {"level": 13, "name": "L14 The Divide (NAIVE same-gesture mirror)", "expect_won": false, "steps": [
+    ["mv",0,1,3],
+    ["rec"], ["mv",-1,0,3], ["end"], ["dep"],
+    ["rec"], ["mv",-1,0,3], ["end"], ["dep"],
+    ["mv",0,1,4]]},
 ]
 
 var _lines: Array = []
