@@ -34,6 +34,7 @@ one global tick), so ghost timing is exact — no real-time desync.
 | Arrow keys / WASD | Move (up/down/left/right — plain top-down) |
 | Hold **Space** | Record a gesture (walk through walls); release to bank it as a reusable shape |
 | **E** | Deploy — stamp a ghost of the banked shape at your position (stamp from anywhere, repeat freely) |
+| **Q** | Wait — advance a beat without moving (stall for timing; while recording it banks a pause the ghost repeats) |
 | **R / T** | Reset the level |
 | **N** | Next level (after solving) |
 | **H** | Toggle help |
@@ -61,7 +62,7 @@ Open the project in Godot 4.6 and press **F5** (starts at the title screen, then
 ## Verifying levels are solvable
 
 Every level ships with a machine-checked solution. The committed headless harness drives each
-level's real solution through the game's own methods and asserts the win state (20 winning cases +
+level's real solution through the game's own methods and asserts the win state (22 winning cases +
 7 naive "this trap really traps" cases):
 
 ```
@@ -83,7 +84,7 @@ echo-chamber/
 └── scripts/
     ├── Main.gd             # grid, record/deploy, replay, top-down rendering, HUD
     ├── StartScreen.gd      # title screen
-    └── _verify.gd          # data-driven 27-case level verifier
+    └── _verify.gd          # data-driven 29-case level verifier
 ```
 
 Levels are ASCII maps inside `Main.gd` (`#` wall, `.` floor, `P` start, `E` exit, `^` spike pit,

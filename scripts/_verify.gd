@@ -16,6 +16,8 @@ extends Node
 ##   ["mv", dx, dy, n]        n identical moves
 ##   ["end"]                  release/bank the recorded gesture into the clipboard (NO ghost)
 ##   ["dep"]                  deploy a ghost of the banked gesture at the current cell
+##   ["wait"] / ["wait", n]   advance n ticks in place (Q key). In PLAY it stalls for timing; during
+##                            RECORD it appends the current cell again (banks a pause the ghost repeats)
 ## A case always starts fresh (load_level re-inits and clears the clipboard). To prove a
 ## naive attempt fails, give it expect_won=false and assert on that (see L7 short / L8 naive).
 ## Run headless:  godot --headless --path <project> _verify.tscn
@@ -25,6 +27,13 @@ const RESULT_PATH := "res://_verify_results.txt"
 var CASES := [
   {"level": 0, "name": "L1 First Step", "expect_won": true, "steps": [
     ["rec"], ["mv",0,1], ["end"], ["mv",0,1], ["mv",1,0], ["dep"],
+    ["mv",1,0], ["mv",1,0], ["mv",0,1], ["mv",0,1]]},
+
+  # RECORD-WAIT proof: the same L1 solve, but the gesture is (down, PAUSE) -> deltas
+  # [(0,0),(0,1),(0,1)]. The deployed ghost holds a beat before/while resting on the switch; the
+  # duplicate delta is replayed correctly by deltas[clamp(...)], and the level still solves.
+  {"level": 0, "name": "L1 First Step (record-WAIT pauses the ghost)", "expect_won": true, "steps": [
+    ["rec"], ["mv",0,1], ["wait"], ["end"], ["mv",0,1], ["mv",1,0], ["dep"],
     ["mv",1,0], ["mv",1,0], ["mv",0,1], ["mv",0,1]]},
 
   {"level": 1, "name": "L2 Sealed", "expect_won": true, "steps": [
@@ -57,6 +66,14 @@ var CASES := [
   {"level": 6, "name": "L7 The Long Way (LONG route)", "expect_won": true, "steps": [
     ["rec"], ["mv",1,0,6], ["mv",0,-1,6], ["end"], ["dep"],
     ["mv",0,-1,6], ["mv",1,0,6], ["mv",0,1,6], ["mv",-1,0,4]]},
+
+  # WAIT-KEY proof: take the SHORT route (2 steps) straight onto the exit, then WAIT at the door
+  # until the slow echo lands on the switch. The ghost deploys at tick 12 and needs 12 ticks (rests
+  # at tick 24); the player reaches the exit at tick 14, so 10 waits close the gap. This turns the
+  # old geometric-stall workaround (the LONG-route case above) into an intentional choice — same
+  # short route as the naive SHORT case (expect_won:false), but now it wins because we wait.
+  {"level": 6, "name": "L7 The Long Way (SHORT route + WAIT at door)", "expect_won": true, "steps": [
+    ["rec"], ["mv",1,0,6], ["mv",0,-1,6], ["end"], ["dep"], ["mv",1,0,2], ["wait",10]]},
 
   {"level": 7, "name": "L8 Off-Center (NAIVE anchor)", "expect_won": false, "steps": [
     ["rec"], ["mv",0,1], ["mv",0,1], ["end"], ["mv",0,1], ["dep"],
@@ -286,6 +303,13 @@ func _do_step(main, step) -> void:
       main._end_record()
     "dep":
       main._deploy()
+    "wait":
+      var wn = 1
+      if step.size() > 1:
+        wn = step[1]
+      for i in range(wn):
+        main._wait()
+        await _wait_idle(main)
     "mv":
       var dx = step[1]
       var dy = step[2]

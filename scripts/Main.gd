@@ -702,7 +702,7 @@ func _build_hud() -> void:
   help = _mklabel(cl, 16, Color("d7e2d0"), 5, HORIZONTAL_ALIGNMENT_LEFT)
   help.position = Vector2(24, 52); help.size = Vector2(720, 200)
   help.visible = false
-  help.text = "CONTROLS\nMove: Arrows / WASD\nHold SPACE: record a gesture (walk through walls) — release to bank it as a reusable shape\nE: deploy — stamp a ghost at your position that traces the banked gesture (stamp from anywhere, as often as you like)\nRe-record (hold SPACE again) to replace the banked gesture.\nR / T: reset level    N: next (after solving)\nF11: fullscreen    Esc: title    H: hide help"
+  help.text = "CONTROLS\nMove: Arrows / WASD\nHold SPACE: record a gesture (walk through walls) — release to bank it as a reusable shape\nE: deploy — stamp a ghost at your position that traces the banked gesture (stamp from anywhere, as often as you like)\nQ: wait — advance a beat without moving (stall for timing; while recording it banks a pause the ghost repeats)\nRe-record (hold SPACE again) to replace the banked gesture.\nR / T: reset level    N: next (after solving)\nF11: fullscreen    Esc: title    H: hide help"
   banner = _mklabel(cl, 38, Color("ffe9a8"), 8, HORIZONTAL_ALIGNMENT_CENTER)
   banner.position = Vector2(0, 300); banner.size = Vector2(1280, 60)
   banner.visible = false
@@ -841,6 +841,18 @@ func _deploy() -> void:
   _update_state()
   _update_hud()
 
+func _wait() -> void:
+  # Advance ONE tick without moving. Not-moving is always legal, so this bypasses _move's
+  # delta/walkability check and calls _advance directly (win/state/hazard checks still run in
+  # _after_step, exactly as for a real step). In PLAY it's a deliberate stall for timing puzzles;
+  # in RECORD it appends the current cell again (a duplicate delta), which the replay math
+  # deltas[clamp(...)] already supports — a recorded pause makes the deployed ghost hold a beat,
+  # so pausing genuinely enriches recordable shapes. Facing is preserved (a stationary beat
+  # shouldn't snap the pawn round to idle-front).
+  var f := player_face
+  _advance(player_cell, mode == Mode.RECORD)
+  player_face = f
+
 func _full_reset() -> void:
   load_level(level_index)
 
@@ -886,6 +898,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
   # E = deploy/echo: stamp a ghost of the banked gesture at the player's current cell.
   if k == KEY_E and mode == Mode.PLAY:
     _deploy(); return
+  # Q = wait: advance a tick in place. In PLAY it's a timing stall; in RECORD it records a pause.
+  if k == KEY_Q:
+    _wait(); return
   match k:
     KEY_UP, KEY_W: _move(Vector2i(0, -1))
     KEY_RIGHT, KEY_D: _move(Vector2i(1, 0))
@@ -1354,11 +1369,11 @@ func _update_hud() -> void:
     status.visible = echoes.size() > 0 or has_gesture
   var base := ""
   if mode == Mode.RECORD:
-    base = "● RECORDING  —  walk through walls  ·  release SPACE to bank the gesture"
+    base = "● RECORDING  —  walk through walls  ·  Q pause  ·  release SPACE to bank the gesture"
   elif has_gesture:
-    base = "Press E to deploy a ghost at your position     ·     hold SPACE to re-record     ·     H help"
+    base = "Press E to deploy a ghost at your position     ·     hold SPACE to re-record     ·     Q wait     ·     H help"
   else:
-    base = "Hold SPACE and walk to record a gesture     ·     H help"
+    base = "Hold SPACE and walk to record a gesture     ·     Q wait     ·     H help"
   if message != "":
     base = message + "        " + base
   prompt.text = base

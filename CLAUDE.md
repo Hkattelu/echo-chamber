@@ -29,9 +29,9 @@ shape from there, freezing on its last delta to hold a switch. Deploying does no
 clipboard; re-recording replaces it.
 
 **All 20 levels** (five tiers) load and are **verified solvable** via the committed headless
-harness (`_verify.tscn` + `scripts/_verify.gd`) — a 27-case table: 20 winning solutions all reach
-`won=true`, plus 7 deliberately-naive cases that assert `won=false` (they prove a level's trap
-actually traps). The full run reports `ALL CASES PASSED`. From Tier C onward (levels 10-20) every
+harness (`_verify.tscn` + `scripts/_verify.gd`) — a 29-case table: 22 winning solutions all reach
+`won=true` (incl. two wait-key cases), plus 7 deliberately-naive cases that assert `won=false` (they
+prove a level's trap actually traps). The full run reports `ALL CASES PASSED`. From Tier C onward (levels 10-20) every
 level **requires ≥2 structurally different recorded shapes** (level 13 needs 3; level 18 covers 5
 switches with exactly 2), and levels 12/15/19/20 make **elevation** load-bearing.
 
@@ -57,7 +57,7 @@ doc is canonical** — trust it and re-align the code.
   (optionally scene: res://main.tscn), then get_debug_output. Or F5.
 - **Committed headless harness (`_verify`).** To machine-verify every level is solvable, run the
   committed harness — it instances main.tscn, forces `move_time` tiny, and drives a data-driven
-  27-case table through the game's OWN public methods, writing per-case results to
+  29-case table through the game's OWN public methods, writing per-case results to
   `res://_verify_results.txt` and exiting 0 iff every case matches its `expect_won`:
   ```
   Godot_v4.6-stable_win64_console.exe --headless --path <project> res://_verify.tscn
@@ -73,6 +73,8 @@ doc is canonical** — trust it and re-align the code.
   - `["mv", dx, dy, n]` — n identical moves
   - `["end"]` — release/bank the recorded gesture into the clipboard (NO ghost)
   - `["dep"]` — deploy a ghost of the banked gesture at the current cell
+  - `["wait"]` / `["wait", n]` — advance n ticks in place (Q key); in PLAY it stalls for timing, in
+    RECORD it banks a pause the ghost repeats
   - Multi-switch: `["rec"]…["end"]` to bank a shape, then walk + `["dep"]` per switch. A second
     switch that a translated copy can't reach needs its own `["rec"]…["end"]` (a new shape).
   - **Convention:** every new level gets a winning case; if it has a trap (a naive route/anchor/
@@ -146,6 +148,13 @@ banking or deploying a ghost). Two states (Mode.PLAY / Mode.RECORD):
   last delta** (holds a switch). **Deploy the same shape from a different cell and the whole shape
   shifts** — anchor + deltas, not baked-in world cells. This is the entire point of the mechanic; do
   not regress it to storing absolute `path` and do not re-couple deploy back into _end_record.
+- **WAIT** (_wait, **key Q**): advance ONE tick without moving. Not-moving is always legal, so it
+  bypasses `_move`'s delta/walkability check and calls `_advance(player_cell, mode == RECORD)`
+  directly (win/state/hazard checks still run in `_after_step`). In PLAY it's a deliberate timing
+  stall (formerly you had to oscillate between two tiles); in RECORD it appends the current cell
+  again — a **duplicate delta** the replay math `deltas[clamp(...)]` already supports, so a recorded
+  pause makes the deployed ghost hold a beat. Facing is preserved across a wait (a stationary beat
+  shouldn't snap the pawn to idle-front). Works in both modes.
 - **Elevation & ghosts:** PLAY movement respects `max_climb` (a solid player climbs ≤1 band), RECORD
   phases through any height, and switch occupancy ignores height — so a switch on a ledge the player
   can't climb is reachable by a *ghost* whose path was recorded while phasing. Levels 12/15/19/20 use
@@ -165,8 +174,9 @@ banking or deploying a ghost). Two states (Mode.PLAY / Mode.RECORD):
 - Removed history: the old **absolute-cell** model (`{path, start_tick}`); the old **record==deploy**
   coupling (release SPACE immediately spawned a ghost at rec_anchor); the old Phase Exchange
   (F/Q/R/E + swap); and the old restart-on-bank "all ghosts replay from tick 0" model. There is no
-  swap, no wait key, no per-bank restart, **no absolute path**, and **no auto-spawn on record** —
-  record banks a shape, E deploys it.
+  swap, no per-bank restart, **no absolute path**, and **no auto-spawn on record** — record banks a
+  shape, E deploys it. (A dedicated **Q wait** key was later added — see the WAIT bullet above — but
+  it is unrelated to the removed Phase-Exchange `Q`.)
 
 ## Levels (ASCII)
 `levels` in Main.gd: array of `{name, hint, rows, heights?, decor?}`.
@@ -259,7 +269,8 @@ Flat orthogonal top-down. No iso projection, no painter's-sort, no vertical wall
 ## Controls
 Arrows/WASD move — hold SPACE record a gesture (release to bank a reusable shape, no ghost yet) —
 **E deploy** (stamp a ghost of the banked shape at your current cell; stamp from anywhere, repeat
-freely) — R/T reset — N next (after solving) — H help — F11 fullscreen — Esc title.
+freely) — **Q wait** (advance a tick in place; in RECORD it banks a pause the ghost repeats) —
+R/T reset — N next (after solving) — H help — F11 fullscreen — Esc title.
 
 ## Tunable @export knobs (on the Main node)
 `tile_size` (ideal cell edge; auto-shrinks to fit big boards), `char_scale_frac` (character height as
