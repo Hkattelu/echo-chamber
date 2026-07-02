@@ -539,10 +539,39 @@ var levels := [
       [Vector2i(6, 9), "td_mushrooms"], [Vector2i(1, 5), "td_rubble"],
     ],
   },
+  # ===== BONUS — switch-gated door (Part 4 stretch). A post-finale coda that introduces the ONE
+  #       new mechanic 1-20 never used: a door (lowercase 'a', linked to switch 1) that is passable
+  #       ONLY while its switch is held. =====
+  {
+    "name": "Coda",
+    "hint": "The heart has a second chamber, sealed behind a barred door — and the door only yields while its outer switch is pressed. Set a keeper on it before you cross, then seal the way beyond from within.",
+    # DOOR mechanic debut. The middle wall (x=6) has ONE opening: the door 'a' at (6,5), gated by
+    # switch 1 (3,2) out in the near room. The EXIT (11,5) sits in the far chamber, reachable ONLY
+    # through that door — so you MUST deploy a ghost onto switch 1 to hold the door open before you
+    # can walk across (naive proof: walk straight at the door with nothing on switch 1 and it stays
+    # shut). The far chamber holds a second sealed switch 2 (9,2) the exit also needs; you deploy its
+    # ghost from inside (9,4) — a spot you can only reach once the door is open. One banked shape
+    # (up2) serves both switches; the sequence, not the shape, is the puzzle. Verified: 3 harness
+    # cases (solve won, gate-closed naive lost, missing-switch-2 naive lost).
+    "rows": [
+      "#############",
+      "#.....#..#..#",
+      "#..1..#.#2#.#",
+      "#.....#..#..#",
+      "#.....#.....#",
+      "#.....a....E#",
+      "#.....#.....#",
+      "#P....#.....#",
+      "#############"],
+    "decor": [
+      [Vector2i(1, 1), "td_crystal"], [Vector2i(5, 1), "td_ferns"],
+      [Vector2i(11, 1), "td_rubble"], [Vector2i(11, 7), "td_mushrooms"],
+    ],
+  },
 ]
 
 const ROMAN := ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
-  "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX"]
+  "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX", "XXI"]
 func _roman(n: int) -> String:
   return ROMAN[n] if n >= 0 and n < ROMAN.size() else str(n + 1)
 
@@ -559,6 +588,10 @@ var heights := {}
 var vines: Array = []
 var plates: Array[Vector2i] = []
 var decor := {}   # cell (Vector2i) -> sprite name. Cosmetic props on wall/floor cells; no gameplay effect.
+var gates := {}   # cell (Vector2i) -> linked plate cell. A switch-gated DOOR: a floor cell that blocks
+                  # PLAY movement while its linked switch is unheld (open iff pressed_plates[link]). State
+                  # is DERIVED each tick from switch occupancy, not stored — so death/reset needs no special
+                  # casing. RECORD phases through it (like a wall); ghost replay ignores it (pure geometry).
 var exit_cell := Vector2i.ZERO
 var start_cell := Vector2i.ZERO
 var board_offset := Vector2.ZERO
@@ -729,10 +762,14 @@ func load_level(idx: int) -> void:
   decor.clear()
   for d in data.get("decor", []):
     decor[d[0]] = d[1]   # d == [Vector2i(x, y), "sprite_name"]
-  walls.clear(); floors.clear(); hazards.clear(); heights.clear(); plates.clear()
+  walls.clear(); floors.clear(); hazards.clear(); heights.clear(); plates.clear(); gates.clear()
   won = false; banner.visible = false; message = ""
   grid_h = rows.size()
   grid_w = (rows[0] as String).length()
+  # Doors ('a'/'b'/'c') link to the same-numbered switch (a->1, b->2, c->3). A door may be scanned
+  # before its switch, so collect [cell, num] and resolve to the switch's cell after the full pass.
+  var plate_num := {}       # digit int -> plate cell
+  var gate_pending: Array = []
   for y in range(grid_h):
     var line: String = rows[y]
     for x in range(line.length()):
@@ -741,7 +778,7 @@ func load_level(idx: int) -> void:
       if ch == "#":
         walls[cell] = true
         continue
-      floors[cell] = true
+      floors[cell] = true   # doors are floor cells too (walkable when open, phaseable when recording)
       var hgt := 0
       if hrows.size() > y and x < (hrows[y] as String).length():
         hgt = (hrows[y] as String)[x].to_int()
@@ -750,7 +787,15 @@ func load_level(idx: int) -> void:
         "P": start_cell = cell
         "E": exit_cell = cell
         "^": hazards[cell] = true
-        "1", "2", "3", "4", "5", "6", "7", "8", "9": plates.append(cell)
+        "1", "2", "3", "4", "5", "6", "7", "8", "9":
+          plates.append(cell)
+          plate_num[ch.to_int()] = cell
+        "a": gate_pending.append([cell, 1])
+        "b": gate_pending.append([cell, 2])
+        "c": gate_pending.append([cell, 3])
+  for gp in gate_pending:
+    if plate_num.has(gp[1]):
+      gates[gp[0]] = plate_num[gp[1]]   # door cell -> its linked switch's cell
   _max_height = 0
   for h in heights.values():
     _max_height = maxi(_max_height, int(h))
@@ -913,6 +958,10 @@ func _in_bounds(c: Vector2i) -> bool:
 
 func _phys_walkable(cell: Vector2i) -> bool:
   if not floors.has(cell):
+    return false
+  # Switch-gated door: blocks PLAY movement while its linked switch is unheld. RECORD phases through
+  # (that path never calls _phys_walkable), and ghost replay ignores walkability entirely.
+  if gates.has(cell) and not pressed_plates.get(gates[cell], false):
     return false
   return absi(_height(cell) - _height(player_cell)) <= max_climb
 
@@ -1158,7 +1207,7 @@ func _draw() -> void:
   for y in range(grid_h):
     for x in range(grid_w):
       var cell := Vector2i(x, y)
-      if floors.has(cell) and decor.has(cell) and not plates.has(cell) and cell != exit_cell and not hazards.has(cell):
+      if floors.has(cell) and decor.has(cell) and not plates.has(cell) and cell != exit_cell and not hazards.has(cell) and not gates.has(cell):
         _blit_tile(decor[cell], cell, 0.9)
   # 6) ghost trail overlays — above floor/decor, UNDER pawns, so they never hide behind geometry
   _draw_paths()
@@ -1284,6 +1333,28 @@ func _draw_decals(cell: Vector2i) -> void:
         # sealed door — dark barred block, no glow, so a closed exit clearly reads as closed
         draw_rect(_cell_rect(c, _ts * 0.82), Color(C_EXIT.r, C_EXIT.g, C_EXIT.b, 0.85))
         draw_rect(_cell_rect(c, _ts * 0.82), Color(0, 0, 0, 0.55), false, 2.0)
+  if gates.has(cell):
+    _draw_gate(cell, pressed_plates.get(gates[cell], false))
+
+# Switch-gated door (distinct from the EXIT door): closed = a solid dark barrier with vertical teal
+# bars, clearly impassable; open = the floor shows through with only teal side-jambs + a frame, so a
+# glance tells you whether it's passable and which state you're seeing.
+func _draw_gate(cell: Vector2i, is_open: bool) -> void:
+  var c := _ground(cell)
+  var r := _cell_rect(c, _ts)
+  if is_open:
+    var jam := _ts * 0.13
+    var col := Color(C_PLATE_ON.r, C_PLATE_ON.g, C_PLATE_ON.b, 0.55)
+    draw_rect(Rect2(r.position, Vector2(jam, r.size.y)), col)
+    draw_rect(Rect2(Vector2(r.end.x - jam, r.position.y), Vector2(jam, r.size.y)), col)
+    draw_rect(r, Color(C_PLATE_ON.r, C_PLATE_ON.g, C_PLATE_ON.b, 0.45), false, 2.0)
+  else:
+    draw_rect(_cell_rect(c, _ts * 0.96), Color(0.10, 0.13, 0.13, 0.94))
+    var bw := _ts * 0.10
+    for i in range(4):
+      var fx := r.position.x + _ts * (0.15 + 0.235 * float(i))
+      draw_rect(Rect2(fx, r.position.y + _ts * 0.09, bw, _ts * 0.82), Color(C_PLATE.r, C_PLATE.g, C_PLATE.b, 0.95))
+    draw_rect(_cell_rect(c, _ts * 0.96), Color(C_PLATE_ON.r, C_PLATE_ON.g, C_PLATE_ON.b, 0.4), false, 2.0)
 
 func _draw_hazard_fallback(cell: Vector2i) -> void:
   var c := _ground(cell)

@@ -230,6 +230,30 @@ var CASES := [
     ["rec"], ["mv",0,1,2], ["end"], ["dep"],
     ["rec"], ["mv",0,-1,4], ["end"], ["dep"],
     ["mv",1,0,3]]},
+
+  # ===== BONUS level 21 (index 20) — switch-gated DOOR =====
+  # SOLVE: walk to (3,4), bank up2, deploy ghost-1 onto switch 1 (3,2) -> the door 'a' at (6,5)
+  # opens; cross into the far chamber, deploy ghost-2 (same up2) from (9,4) onto sealed switch 2
+  # (9,2), then walk to the exit (11,5). Both switches held at tick 18 -> win. Door open the whole
+  # crossing because ghost-1 froze on switch 1 (margins: ghost-1 9, ghost-2 1).
+  {"level": 20, "name": "L21 Coda (SOLVE, door held open by ghost-1)", "expect_won": true, "steps": [
+    ["mv",1,0,2], ["mv",0,-1,3],
+    ["rec"], ["mv",0,-1,2], ["end"], ["dep"],
+    ["mv",1,0,2], ["mv",0,1,1], ["mv",1,0,1],
+    ["mv",1,0,3], ["mv",0,-1,1], ["dep"],
+    ["mv",0,1,1], ["mv",1,0,2]]},
+  # NAIVE (door held shut): march straight at the door with nothing on switch 1. The door at (6,5)
+  # stays barred, the move no-ops, the player is stuck in the near room (5,5) and never reaches the
+  # exit. Proves the door is load-bearing — a plain wall-gap couldn't gate on switch state.
+  {"level": 20, "name": "L21 Coda (NAIVE, door shut — no ghost on switch 1)", "expect_won": false, "steps": [
+    ["mv",0,-1,2], ["mv",1,0,6]]},
+  # NAIVE (skip switch 2): open the door and cross correctly, but never deploy the second ghost.
+  # The player reaches the exit, yet it needs BOTH switches — switch 2 is unheld, so it stays shut.
+  {"level": 20, "name": "L21 Coda (NAIVE, crossed but switch 2 unheld)", "expect_won": false, "steps": [
+    ["mv",1,0,2], ["mv",0,-1,3],
+    ["rec"], ["mv",0,-1,2], ["end"], ["dep"],
+    ["mv",1,0,2], ["mv",0,1,1], ["mv",1,0,1],
+    ["mv",1,0,4], ["mv",1,0,1]]},
 ]
 
 var _lines: Array = []

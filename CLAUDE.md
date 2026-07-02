@@ -28,16 +28,19 @@ anywhere and press **E (deploy)** to stamp a ghost at your current cell that tra
 shape from there, freezing on its last delta to hold a switch. Deploying does not consume the
 clipboard; re-recording replaces it.
 
-**All 20 levels** (five tiers) load and are **verified solvable** via the committed headless
-harness (`_verify.tscn` + `scripts/_verify.gd`) — a 29-case table: 22 winning solutions all reach
-`won=true` (incl. two wait-key cases), plus 7 deliberately-naive cases that assert `won=false` (they
-prove a level's trap actually traps). The full run reports `ALL CASES PASSED`. From Tier C onward (levels 10-20) every
+**All 20 levels** (five tiers) **plus a bonus level 21 ("Coda")** load and are **verified solvable**
+via the committed headless harness (`_verify.tscn` + `scripts/_verify.gd`) — a 32-case table: 23
+winning solutions all reach `won=true` (incl. two wait-key cases + Coda), plus 9 deliberately-naive
+cases that assert `won=false` (they prove a level's trap actually traps). The full run reports
+`ALL CASES PASSED`. From Tier C onward (levels 10-20) every
 level **requires ≥2 structurally different recorded shapes** (level 13 needs 3; level 18 covers 5
 switches with exactly 2), and levels 12/15/19/20 make **elevation** load-bearing.
 
 The player and ghosts are **PixelLab character sprites** (orange adventurer / purple spectral echo),
-now with **cardinal** facings (`_n/_e/_s/_w`, idle `_s`). Natural next steps when we return:
-switch-gated intermediate doors (Part 4 of the redesign plan) and audio for record/deploy/win.
+now with **cardinal** facings (`_n/_e/_s/_w`, idle `_s`). Both Part-4 stretch mechanics shipped: the
+**Q wait key** (see the WAIT bullet in Core model) and **switch-gated doors** (debuting in bonus
+level 21 — see the Doors subsection). Natural next steps when we return: audio for
+record/deploy/win, and possibly more door levels that build on the level-21 debut.
 
 **History note:** the mechanic evolved through two redesigns that both bit the project, so they are
 called out to prevent regression. (1) Ghosts used to be **absolute** world cells (`{path,
@@ -57,7 +60,7 @@ doc is canonical** — trust it and re-align the code.
   (optionally scene: res://main.tscn), then get_debug_output. Or F5.
 - **Committed headless harness (`_verify`).** To machine-verify every level is solvable, run the
   committed harness — it instances main.tscn, forces `move_time` tiny, and drives a data-driven
-  29-case table through the game's OWN public methods, writing per-case results to
+  32-case table through the game's OWN public methods, writing per-case results to
   `res://_verify_results.txt` and exiting 0 iff every case matches its `expect_won`:
   ```
   Godot_v4.6-stable_win64_console.exe --headless --path <project> res://_verify.tscn
@@ -159,6 +162,18 @@ banking or deploying a ghost). Two states (Mode.PLAY / Mode.RECORD):
   phases through any height, and switch occupancy ignores height — so a switch on a ledge the player
   can't climb is reachable by a *ghost* whose path was recorded while phasing. Levels 12/15/19/20 use
   this.
+- **Switch-gated doors (`gates`):** a **door** is a floor cell that blocks PLAY movement *unless* its
+  linked switch is currently held. In the ASCII a door is a lowercase letter — `a`→switch 1, `b`→2,
+  `c`→3 (parsed in `load_level` into `gates`: door cell → linked plate cell, resolved after the full
+  scan so a door may appear before its switch). `_phys_walkable` returns false for a closed door
+  (linked switch unheld); RECORD phases through it (that path never calls `_phys_walkable`, like a
+  wall); ghost replay ignores it (`_echo_pos` is pure geometry). Door state is **derived each tick**
+  from `pressed_plates`, never stored — so death/reset needs **no special casing** (all doors read
+  closed at reset because no ghost holds anything). Drawn by `_draw_gate`: **closed** = a dark barrier
+  with vertical teal bars (clearly impassable, distinct from the EXIT door); **open** = the floor
+  shows through with teal side-jambs + a frame. Debuts in bonus level 21 ("Coda"). The forcing a
+  plain wall-gap can't express: an area (holding the exit) is passable **only while a ghost holds the
+  gate switch**, so you must deploy the keeper *before* you can cross.
 - **Death / reset clears ghosts but KEEPS the clipboard:** _die and _restart_attempt wipe echoes,
   tick→0, player→start (continuous timelines can't be partially rewound) — but `gesture_deltas`
   **survives** (it's a learned tool; less punishing). Only `load_level` clears the clipboard (a fresh
@@ -180,14 +195,16 @@ banking or deploying a ghost). Two states (Mode.PLAY / Mode.RECORD):
 
 ## Levels (ASCII)
 `levels` in Main.gd: array of `{name, hint, rows, heights?, decor?}`.
-- rows: `#` wall, `.` floor, `P` start, `E` exit, `^` spike pit (lethal), `1-9` switch.
+- rows: `#` wall, `.` floor, `P` start, `E` exit, `^` spike pit (lethal), `1-9` switch,
+  `a`/`b`/`c` switch-gated **door** (open only while switch 1/2/3 is held — see the Doors bullet in
+  Core model). A door cell is walkable floor when open and phaseable while recording.
 - heights (optional): per-cell elevation digit (`"00200"` etc.) — a real puzzle axis now (see the
   Core model's elevation note). Cells default to height 0 (flat) when no `heights` block is given.
 - decor (optional): see the Decor system section.
 - (`vines` is still parsed into a `vines` array for backward compat but is **no longer rendered** —
   the iso `_draw_vine` pass was removed. No current level uses it.)
-- **20 levels in 5 tiers, all verified solvable** (headless harness, `won=true`; naive traps
-  `won=false`):
+- **20 levels in 5 tiers + 1 bonus, all verified solvable** (headless harness, `won=true`; naive
+  traps `won=false`):
   - **Tier A — Foundations (1-4):** 1 First Step, 2 Sealed, 3 Spikes, 4 Twice.
   - **Tier B — Combination (5-9):** 5 Chorus, 6 Sealed Gauntlet, 7 The Long Way, 8 Off-Center,
     9 Crossroads, Refined.
@@ -197,7 +214,15 @@ banking or deploying a ghost). Two states (Mode.PLAY / Mode.RECORD):
   - **Tier D — Precision & scale (15-17):** 15 The Ledge Run, 16 Narrow Margins, 17 The Foundry.
   - **Tier E — Capstones (18-20):** 18 The Choir (5 switches, exactly 2 shapes), 19 The Long Climb,
     20 The Tower's Heart (deploy-order finale — recording advances the tick, so bank-order matters).
-  - Elevation levels: 12, 15, 19, 20. `ROMAN` covers 20 (`_roman` falls back to `str(n+1)` beyond).
+    **The Tower's Heart is still the finale of the main arc; levels 1-20 are byte-for-byte untouched.**
+  - **Bonus (21):** 21 Coda — post-finale coda debuting the switch-gated **door** (a single door `a`
+    gated by switch 1; the exit sits in a far chamber reachable only by crossing it, so you must plant
+    a ghost on switch 1 to hold the door open before you can walk through, then seal switch 2 from
+    inside). One banked shape (up2) serves both switches — the *sequence*, not the shape, is the
+    puzzle. 3 harness cases: solve `won`, plus two naive losses (door held shut; crossed but switch 2
+    unheld).
+  - Elevation levels: 12, 15, 19, 20. Door level: 21. `ROMAN` covers 21 (`_roman` falls back to
+    `str(n+1)` beyond).
 - Sealed switches force through-walls recording; open switches just need a ghost parked on them (you
   can't stand on the switch AND the exit). Multi-switch levels stamp one banked shape from several
   spots *when* a translation reaches every switch; when it can't, bank a second/third distinct shape.

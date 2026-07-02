@@ -55,6 +55,10 @@ deploy-order finales:
 Levels 10 onward each require at least two structurally different recorded shapes; 12/15/19/20 make
 elevation load-bearing (a switch on a ledge you can't climb is reachable only by a phasing ghost).
 
+Plus a **bonus level 21 — "Coda"** — a post-finale coda introducing the **switch-gated door**: a
+barred door that opens only while its linked switch is held, so you must post a ghost on the switch
+to hold the way open before you can cross to the sealed inner chamber (and the exit) beyond it.
+
 ## Running
 
 Open the project in Godot 4.6 and press **F5** (starts at the title screen, then the game).
@@ -62,8 +66,8 @@ Open the project in Godot 4.6 and press **F5** (starts at the title screen, then
 ## Verifying levels are solvable
 
 Every level ships with a machine-checked solution. The committed headless harness drives each
-level's real solution through the game's own methods and asserts the win state (22 winning cases +
-7 naive "this trap really traps" cases):
+level's real solution through the game's own methods and asserts the win state (23 winning cases +
+9 naive "this trap really traps" cases):
 
 ```
 Godot_v4.6-stable_win64_console.exe --headless --path . res://_verify.tscn
@@ -84,11 +88,12 @@ echo-chamber/
 └── scripts/
     ├── Main.gd             # grid, record/deploy, replay, top-down rendering, HUD
     ├── StartScreen.gd      # title screen
-    └── _verify.gd          # data-driven 29-case level verifier
+    └── _verify.gd          # data-driven 32-case level verifier
 ```
 
 Levels are ASCII maps inside `Main.gd` (`#` wall, `.` floor, `P` start, `E` exit, `^` spike pit,
-`1`-`9` switches; an optional `heights` block gives per-cell elevation) — easy to add more.
+`1`-`9` switches, `a`/`b`/`c` switch-gated doors opened by switch 1/2/3; an optional `heights` block
+gives per-cell elevation) — easy to add more.
 
 ## Tuning knobs
 
@@ -98,5 +103,6 @@ Exposed as `@export` on the `Main` node (tweakable live in the Inspector): `tile
 
 ## Status
 
-Playable prototype, top-down. All 20 levels verified solvable via the headless harness. Art is a mix
-of PixelLab sprites and procedural fallbacks (a few decor props are placeholders pending art budget).
+Playable prototype, top-down. All 20 levels + the bonus door level verified solvable via the headless
+harness. Art is a mix of PixelLab sprites and procedural fallbacks (a few decor props are placeholders
+pending art budget).
