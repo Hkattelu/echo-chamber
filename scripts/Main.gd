@@ -443,6 +443,102 @@ var levels := [
       [Vector2i(3, 7), "td_mushrooms"], [Vector2i(14, 7), "td_rubble"],
     ],
   },
+  # ===== TIER E — capstones (18-20) =====
+  {
+    "name": "The Choir",
+    "hint": "Five voices, but only two songs. The same reach means one thing up here and another thing over there — it is only ever a question of where you stand to sing it.",
+    # THE THESIS LEVEL. Exactly TWO gestures: up2 (stamped on the three upper switches from below each)
+    # and down2 (stamped on the two lower switches). Five switches, two shapes — the whole game in one
+    # room: a gesture means something different depending on where you plant it. Verified (margins 19..1).
+    "rows": [
+      "#################",
+      "#################",
+      "##1####2####3####",
+      "#################",
+      "#P.............E#",
+      "#################",
+      "####4#####5######",
+      "#################",
+      "#################"],
+    "decor": [
+      [Vector2i(5, 1), "td_crystal"], [Vector2i(9, 1), "td_ferns"],
+      [Vector2i(2, 7), "td_mushrooms"], [Vector2i(14, 7), "td_rubble"],
+    ],
+  },
+  {
+    "name": "The Long Climb",
+    "hint": "From the floor there is a buried switch below you and two spires far overhead, and a spike chasm between. Plant what you can down here, take the one slope up, and spend the whole walk home paying off the slowest echo.",
+    # Largest room. Combines: a ground sealed switch (down2), a two-row spike moat crossed only by the
+    # x13 ramp climbing 0-1-2-3 (load-bearing), and two h5 spire switches on the high bridge needing an
+    # L then an up2. Three distinct shapes; the L ghost is planted first so the long walk to the far
+    # door pays off its timing. Verified solvable (margins 30/4/1).
+    "rows": [
+      "###############",
+      "####2####3#####",
+      "###############",
+      "#E............#",
+      "#^^^^^^^^^^^^.#",
+      "#^^^^^^^^^^^^.#",
+      "#P............#",
+      "###############",
+      "##1############",
+      "###############",
+      "###############"],
+    "heights": [
+      "000000000000000",
+      "000050000500000",
+      "000000000000000",
+      "033333333333330",
+      "000000000000020",
+      "000000000000010",
+      "000000000000000",
+      "000000000000000",
+      "000000000000000",
+      "000000000000000",
+      "000000000000000"],
+    "decor": [
+      [Vector2i(6, 2), "td_crystal"], [Vector2i(11, 2), "td_ferns"],
+      [Vector2i(4, 10), "td_mushrooms"], [Vector2i(10, 10), "td_rubble"],
+    ],
+  },
+  {
+    "name": "The Tower's Heart",
+    "hint": "Two sealed switches, one patient and one quick, both stamped from the heart of the tower — and the door lies up a short slope beyond. The order you bank them in is the whole puzzle: give your slow echo its head start.",
+    # THE FINALE — deploy ORDER is the puzzle. Because RECORDING advances the clock, whichever gesture
+    # you bank first gets a head start. From the hub (3,7) you must record+stamp the SLOW up4 BEFORE the
+    # quick down2, then climb the ramp to the door (6,7,h2) — only 3 steps away. Record them in the wrong
+    # order and the slow echo is one step short (see the WRONG-ORDER _verify case, won=false). Also here:
+    # sealed switches, a height-2 door reachable only by its ramp (a +2 cliff blocks the far approach),
+    # and a spike-guarded dead end past it. Verified: correct order margins 1/1; wrong order fails.
+    "rows": [
+      "###########",
+      "###########",
+      "###########",
+      "###1#######",
+      "###########",
+      "###########",
+      "###########",
+      "#P....E.^.#",
+      "###########",
+      "###2#######",
+      "###########"],
+    "heights": [
+      "00000000000",
+      "00000000000",
+      "00000000000",
+      "00000000000",
+      "00000000000",
+      "00000000000",
+      "00000000000",
+      "00000120000",
+      "00000000000",
+      "00000000000",
+      "00000000000"],
+    "decor": [
+      [Vector2i(6, 3), "td_crystal"], [Vector2i(8, 3), "td_ferns"],
+      [Vector2i(6, 9), "td_mushrooms"], [Vector2i(1, 5), "td_rubble"],
+    ],
+  },
 ]
 
 const ROMAN := ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",

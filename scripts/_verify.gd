@@ -170,6 +170,49 @@ var CASES := [
     ["mv",1,0,2],
     ["rec"], ["mv",0,1,2], ["end"], ["dep"],
     ["mv",1,0,3]]},
+
+  # ===== TIER E (levels 18-20, indices 17-19) =====
+
+  # L18: exactly TWO shapes (up2, down2) stamped across 5 switches. Interleave re-recording as we sweep.
+  {"level": 17, "name": "L18 The Choir (SOLVE, 2 shapes / 5 switches)", "expect_won": true, "steps": [
+    ["mv",1,0,1],
+    ["rec"], ["mv",0,-1,2], ["end"], ["dep"],
+    ["mv",1,0,2],
+    ["rec"], ["mv",0,1,2], ["end"], ["dep"],
+    ["mv",1,0,3],
+    ["rec"], ["mv",0,-1,2], ["end"], ["dep"],
+    ["mv",1,0,3],
+    ["rec"], ["mv",0,1,2], ["end"], ["dep"],
+    ["mv",1,0,2],
+    ["rec"], ["mv",0,-1,2], ["end"], ["dep"],
+    ["mv",1,0,3]]},
+
+  # L19: plant the ground ghost (down2), sweep to the ramp, CLIMB 0-1-2-3, plant the L then the up2 spire.
+  {"level": 18, "name": "L19 The Long Climb (SOLVE, climb + 3 shapes)", "expect_won": true, "steps": [
+    ["mv",1,0,1],
+    ["rec"], ["mv",0,1,2], ["end"], ["dep"],
+    ["mv",1,0,11],
+    ["mv",0,-1,3],
+    ["mv",-1,0,6],
+    ["rec"], ["mv",1,0,2], ["mv",0,-1,2], ["end"], ["dep"],
+    ["mv",-1,0,3],
+    ["rec"], ["mv",0,-1,2], ["end"], ["dep"],
+    ["mv",-1,0,3]]},
+
+  # L20 finale: at the hub, bank the SLOW up4 FIRST (recording advances the clock, giving it a head
+  # start), then the quick down2, then climb the ramp to the door. Correct order -> both echoes arrive.
+  {"level": 19, "name": "L20 Tower's Heart (SOLVE, slow-first order)", "expect_won": true, "steps": [
+    ["mv",1,0,2],
+    ["rec"], ["mv",0,-1,4], ["end"], ["dep"],
+    ["rec"], ["mv",0,1,2], ["end"], ["dep"],
+    ["mv",1,0,3]]},
+  # WRONG ORDER: bank the quick down2 FIRST, then the slow up4 — the slow echo is deployed too late and
+  # arrives one step short of its switch. Same moves, only the order flipped, and it loses.
+  {"level": 19, "name": "L20 Tower's Heart (WRONG ORDER, fast-first)", "expect_won": false, "steps": [
+    ["mv",1,0,2],
+    ["rec"], ["mv",0,1,2], ["end"], ["dep"],
+    ["rec"], ["mv",0,-1,4], ["end"], ["dep"],
+    ["mv",1,0,3]]},
 ]
 
 var _lines: Array = []
