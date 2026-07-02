@@ -1,5 +1,5 @@
 extends Node2D
-## ECHO CHAMBER — 2D isometric temporal-puzzle prototype.
+## ECHO CHAMBER — 2D top-down temporal-puzzle prototype.
 ## Worn overgrown-tower look; "motion record" mechanic.
 ##
 ## Turn-based, deterministic lockstep. Two-step "record then deploy" model:
@@ -15,14 +15,21 @@ extends Node2D
 ## held — then walk onto it. When NOT recording you are solid: walls block, spike pits kill.
 
 # ---- Tunable game-feel knobs ----
-@export var tile_w: int = 112
-@export var tile_h: int = 56
-@export var wall_height: int = 46
-@export var level_step: int = 28
-@export var max_climb: int = 1
+# TOP-DOWN renderer. tile_size is the on-screen square edge of one cell. The whole board is
+# auto-scaled DOWN from this if a level is too big to fit the 1280x720 base (see _recompute_layout),
+# so bigger future levels stay fully on-screen.
+@export var tile_size: int = 96
+@export var max_climb: int = 1             # SIMULATION knob (kept): max height step a solid player may climb, see _phys_walkable.
+@export var char_scale_frac: float = 1.3   # character sprite height as a multiple of the fitted tile size
 @export var move_time: float = 0.10
 @export var echo_alpha: float = 0.62
 @export var phase_alpha: float = 0.5
+# Elevation is shown WITHOUT lifting pawns up the screen (that reads as "floating" in flat top-down,
+# which is why the iso `level_step`/`wall_height` positional exports were removed). Instead each
+# height band tints its floor a step brighter and a subtle ledge line is drawn on the downhill edges
+# of a raised cell. All current levels are height 0 (flat), so this stays invisible until a level
+# actually populates `heights` — it exists and is correct, just not exercised yet.
+@export var elev_tint_step: float = 0.09   # per-height-band floor brightening (kept subtle)
 
 # ---- Palette (worn overgrown tower) ----
 const C_FLOOR := Color("9ea08d")
@@ -30,10 +37,6 @@ const C_FLOOR_EDGE := Color("585a47")
 const C_WALL_TOP := Color("8b8d78")
 const C_WALL_L := Color("62644e")
 const C_WALL_R := Color("4c4e3a")
-const C_COL_L := Color("4a5a4e")
-const C_COL_R := Color("36443a")
-const C_MOSS_D := Color("46602f")
-const C_MOSS_M := Color("5d7a3a")
 const C_PLATE := Color("2f7e7c")
 const C_PLATE_ON := Color("5fd6cf")
 const C_EXIT := Color("2a6f6e")
@@ -49,45 +52,25 @@ const C_BG_OUT := Color("262a20")
 const C_VIGNETTE := Color(0.063, 0.078, 0.047, 0.62)
 const C_PIT_TEETH := Color("8c8a7e")
 
-const SPR := {
-  # Base ground/wall are now PixelLab iso tiles too (mossy weathered stone, replacing the old
-  # Aseprite green-blob tiles) -> same (32,47)/1.75 convention as the decor below.
-  "floor_a": {"path": "res://assets/sprites/floor_a.png", "anchor": Vector2(32, 47), "scale": 1.75},
-  "floor_b": {"path": "res://assets/sprites/floor_b.png", "anchor": Vector2(32, 47), "scale": 1.75},
-  "wall":    {"path": "res://assets/sprites/wall.png",    "anchor": Vector2(32, 47), "scale": 1.75},
-  "hazard":  {"path": "res://assets/sprites/hazard.png",  "anchor": Vector2(56, 38)},
-  # PixelLab iso tiles (64x64). Footprint diamond centre is at source (32,47);
-  # scaled x1.75 -> exact 112x56 tile footprint (matches floor/wall geometry).
-  "door_closed":  {"path": "res://assets/sprites/door_closed.png",  "anchor": Vector2(32, 47), "scale": 1.75},
-  "door_open":    {"path": "res://assets/sprites/door_open.png",    "anchor": Vector2(32, 47), "scale": 1.75},
-  "crystal":      {"path": "res://assets/sprites/crystal.png",      "anchor": Vector2(32, 47), "scale": 1.75},
-  "brazier":      {"path": "res://assets/sprites/brazier.png",      "anchor": Vector2(32, 47), "scale": 1.75},
-  "wall_mossy":   {"path": "res://assets/sprites/wall_mossy.png",   "anchor": Vector2(32, 47), "scale": 1.75},
-  "wall_cracked": {"path": "res://assets/sprites/wall_cracked.png", "anchor": Vector2(32, 47), "scale": 1.75},
-  "rubble":       {"path": "res://assets/sprites/rubble.png",       "anchor": Vector2(32, 47), "scale": 1.75},
-  "mushrooms":    {"path": "res://assets/sprites/mushrooms.png",    "anchor": Vector2(32, 47), "scale": 1.75},
-  "plate":        {"path": "res://assets/sprites/plate.png",        "anchor": Vector2(32, 47), "scale": 1.75},
-  "statue":       {"path": "res://assets/sprites/statue.png",       "anchor": Vector2(32, 47), "scale": 1.75},
-  "obelisk":      {"path": "res://assets/sprites/obelisk.png",      "anchor": Vector2(32, 47), "scale": 1.75},
-  "urn":          {"path": "res://assets/sprites/urn.png",          "anchor": Vector2(32, 47), "scale": 1.75},
-  "ferns":        {"path": "res://assets/sprites/ferns.png",        "anchor": Vector2(32, 47), "scale": 1.75},
-  # Character rotations (PixelLab 8-dir, 68px). Drawn in _draw_pawn at CHAR_SCALE with the
-  # foot anchor CHAR_ANCHOR. pl_* = player (orange), gh_* = ghost echo (purple spectral).
-  # Suffix is the iso facing: _se(+x) _sw(+y) _nw(-x) _ne(-y) _s(idle).
-  "pl_s":  {"path": "res://assets/sprites/pl_s.png",  "anchor": Vector2(34, 58), "scale": 1.35},
-  "pl_se": {"path": "res://assets/sprites/pl_se.png", "anchor": Vector2(34, 58), "scale": 1.35},
-  "pl_sw": {"path": "res://assets/sprites/pl_sw.png", "anchor": Vector2(34, 58), "scale": 1.35},
-  "pl_ne": {"path": "res://assets/sprites/pl_ne.png", "anchor": Vector2(34, 58), "scale": 1.35},
-  "pl_nw": {"path": "res://assets/sprites/pl_nw.png", "anchor": Vector2(34, 58), "scale": 1.35},
-  "gh_s":  {"path": "res://assets/sprites/gh_s.png",  "anchor": Vector2(34, 58), "scale": 1.35},
-  "gh_se": {"path": "res://assets/sprites/gh_se.png", "anchor": Vector2(34, 58), "scale": 1.35},
-  "gh_sw": {"path": "res://assets/sprites/gh_sw.png", "anchor": Vector2(34, 58), "scale": 1.35},
-  "gh_ne": {"path": "res://assets/sprites/gh_ne.png", "anchor": Vector2(34, 58), "scale": 1.35},
-  "gh_nw": {"path": "res://assets/sprites/gh_nw.png", "anchor": Vector2(34, 58), "scale": 1.35},
-}
-const CHAR_ANCHOR := Vector2(34, 58)   # foot point in the 68px character canvas
-const CHAR_SCALE := 1.35
-var tex := {}
+# Sprites are loaded LAZILY BY NAME from res://assets/sprites/<name>.png (Image.load_from_file at
+# runtime, so they render even without .import files). This keeps the renderer projection-agnostic
+# and the decor dict fully generic — a level may name ANY sprite and it just blits (missing = skip).
+const SPRITE_DIR := "res://assets/sprites/"
+# The required top-down set the parallel asset pass provides; pre-warmed in _load_textures. Anything
+# else (decor props a level names) is lazy-loaded on first blit. td_* = top-down tiles/decals;
+# pl_/gh_ = player / ghost-echo characters (cardinal facings + idle).
+const REQUIRED_SPRITES := [
+  "td_floor_a", "td_floor_b", "td_wall", "td_hazard", "td_plate", "td_door_closed", "td_door_open",
+  "pl_n", "pl_e", "pl_s", "pl_w", "gh_n", "gh_e", "gh_s", "gh_w",
+]
+# Foot anchor as a FRACTION of the sprite's own size (robust to native px): centre-x, ~85% down.
+const CHAR_FOOT := Vector2(0.5, 0.85)
+# Subtle per-deploy-order tints (multiplied over the purple ghost sprite) so ghost 1/2/3 read apart.
+const GHOST_TINTS := [Color("cbbcff"), Color("bcd6ff"), Color("ffc7e6"), Color("c4eccd"), Color("ffe6ad")]
+var tex := {}          # name -> Texture2D (loaded & cached)
+var tex_absent := {}   # name -> true (known missing; don't re-stat the filesystem every frame)
+var _ts: float = 96.0  # fitted on-screen tile edge in px (recomputed per level in _recompute_layout)
+var _max_height := 0   # tallest height band in the current level (0 = flat -> skip elevation draws)
 var bg_tex: GradientTexture2D
 
 enum Mode { PLAY, RECORD }
@@ -394,21 +377,41 @@ var title_tween: Tween
 
 func _ready() -> void:
   texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+  get_viewport().size_changed.connect(_on_viewport_resized)
   _load_textures()
   _build_bg()
   _build_vignette()
   _build_hud()
   load_level(0)
 
+func _on_viewport_resized() -> void:
+  # "expand" stretch can change the reported viewport on non-16:9 windows — re-centre the board.
+  _recompute_layout()
+  _snap_positions()
+
 func _load_textures() -> void:
-  for sname in SPR.keys():
-    var path: String = SPR[sname]["path"]
-    var abs_path := ProjectSettings.globalize_path(path)
-    var p := abs_path if FileAccess.file_exists(abs_path) else path
-    if FileAccess.file_exists(p):
-      var img := Image.load_from_file(p)
-      if img != null:
-        tex[sname] = ImageTexture.create_from_image(img)
+  for sname in REQUIRED_SPRITES:
+    _get_tex(sname)   # pre-warm the required set; any missing ones just take the procedural fallback
+
+# Lazy texture fetch by name -> res://assets/sprites/<name>.png. Caches hits AND misses, so a
+# missing sprite (the procedural-fallback path, or a decor prop this build doesn't ship) is only
+# stat'd once, not every frame. Projection-agnostic: never touches iso/ortho geometry.
+func _get_tex(sname: String) -> Texture2D:
+  if tex.has(sname):
+    return tex[sname]
+  if tex_absent.has(sname):
+    return null
+  var path := SPRITE_DIR + sname + ".png"
+  var abs_path := ProjectSettings.globalize_path(path)
+  var p := abs_path if FileAccess.file_exists(abs_path) else path
+  if FileAccess.file_exists(p):
+    var img := Image.load_from_file(p)
+    if img != null:
+      var t := ImageTexture.create_from_image(img)
+      tex[sname] = t
+      return t
+  tex_absent[sname] = true
+  return null
 
 func _build_bg() -> void:
   var g := Gradient.new()
@@ -525,10 +528,10 @@ func load_level(idx: int) -> void:
         "E": exit_cell = cell
         "^": hazards[cell] = true
         "1", "2", "3", "4", "5", "6", "7", "8", "9": plates.append(cell)
-  var center := Vector2((grid_w - 1) * 0.5, (grid_h - 1) * 0.5)
-  var raw := Vector2((center.x - center.y) * tile_w * 0.5, (center.x + center.y) * tile_h * 0.5)
-  var vp := get_viewport_rect().size
-  board_offset = vp * 0.5 - raw + Vector2(0, -wall_height * 0.5 + 24)
+  _max_height = 0
+  for h in heights.values():
+    _max_height = maxi(_max_height, int(h))
+  _recompute_layout()
   echoes.clear()
   gesture_deltas.clear()   # fresh level: forget the recorded gesture (it persists across death, NOT load)
   _restart_attempt()
@@ -754,49 +757,41 @@ func _check_win() -> void:
       banner.text = "CHAMBER SOLVED!   N = next"
     banner.visible = true
 
-# ---- Iso transform ----
+# ---- Orthogonal top-down transform ----
+# Fit the grid_w x grid_h board into the base viewport. tile_size is the ideal cell edge; if the
+# level is too big to fit (with a ~1-cell margin) _ts shrinks so the whole board stays visible.
+func _recompute_layout() -> void:
+  var vp := get_viewport_rect().size
+  var margin := 1.0
+  var fit_w: float = vp.x / maxf(1.0, float(grid_w) + margin * 2.0)
+  var fit_h: float = vp.y / maxf(1.0, float(grid_h) + margin * 2.0)
+  _ts = minf(float(tile_size), minf(fit_w, fit_h))
+  var center := Vector2((grid_w - 1) * 0.5, (grid_h - 1) * 0.5)
+  board_offset = vp * 0.5 - center * _ts
+
+# _ground(c) = the CENTRE of cell c in screen space. board_offset centres the whole grid.
 func _ground(c: Vector2i) -> Vector2:
-  return Vector2((c.x - c.y) * tile_w * 0.5, (c.x + c.y) * tile_h * 0.5) + board_offset
+  return Vector2(c.x, c.y) * _ts + board_offset
 
+# Pawns stand at the cell centre. Elevation NO LONGER shifts screen position (that read as floating
+# in flat top-down); height is shown via floor tint + ledge lines instead. Kept as a named helper so
+# the pawn/trace draw code reads clearly ("where this actor stands").
 func _surface(c: Vector2i) -> Vector2:
-  return _ground(c) - Vector2(0, _height(c) * level_step)
+  return _ground(c)
 
-func _diamond(center: Vector2, w: float, h: float) -> PackedVector2Array:
-  return PackedVector2Array([
-    center + Vector2(0, -h * 0.5), center + Vector2(w * 0.5, 0),
-    center + Vector2(0, h * 0.5), center + Vector2(-w * 0.5, 0)])
+# Axis-aligned square of side `edge`, centred on `center` — the top-down replacement for the diamond.
+func _cell_rect(center: Vector2, edge: float) -> Rect2:
+  return Rect2(center - Vector2(edge, edge) * 0.5, Vector2(edge, edge))
 
-func _blit(sname: String, pos: Vector2) -> bool:
-  if not tex.has(sname):
+# Draw a tile/decal/prop sprite stretched to fill the cell's square (times `frac`, centred), so any
+# source resolution maps cleanly onto the fitted tile. Returns false if the sprite is missing, so the
+# caller draws a procedural fallback (or, for decor, just skips). Projection-agnostic.
+func _blit_tile(sname: String, cell: Vector2i, frac := 1.0, mod := Color.WHITE) -> bool:
+  var t := _get_tex(sname)
+  if t == null:
     return false
-  var sc: float = SPR[sname].get("scale", 1.0)
-  var anchor: Vector2 = SPR[sname]["anchor"]
-  if sc == 1.0:
-    draw_texture(tex[sname], pos - anchor)
-  else:
-    var sz := Vector2(tex[sname].get_size())
-    draw_texture_rect(tex[sname], Rect2(pos - anchor * sc, sz * sc), false)
+  draw_texture_rect(t, _cell_rect(_ground(cell), _ts * frac), false, mod)
   return true
-
-func _draw_column(top: Vector2, depth: float) -> void:
-  var t := _diamond(top, tile_w, tile_h)
-  var down := Vector2(0, depth)
-  draw_colored_polygon(PackedVector2Array([t[3], t[2], t[2] + down, t[3] + down]), C_COL_L)
-  draw_colored_polygon(PackedVector2Array([t[2], t[1], t[1] + down, t[2] + down]), C_COL_R)
-
-func _draw_vine(x: float, y: float, length: float, seed: float) -> void:
-  var segs := 6
-  var step := length / segs
-  var pts := PackedVector2Array()
-  pts.append(Vector2(x, y))
-  for i in range(1, segs + 1):
-    var sway := sin(i * 1.3 + seed) * 7.0
-    pts.append(Vector2(x + sway, y + step * i))
-  draw_polyline(pts, Color(C_MOSS_D.r, C_MOSS_D.g, C_MOSS_D.b, 0.9), 2.6)
-  for i in range(1, segs + 1):
-    var sway2 := sin(i * 1.3 + seed) * 7.0
-    var lp := Vector2(x + sway2 + (5 if i % 2 else -5), y + step * i)
-    draw_circle(lp, 3.0, C_MOSS_M if i % 2 else C_MOSS_D)
 
 # ---- Vector pawns ----
 func _draw_stadium(cx: float, top: float, w: float, h: float, col: Color) -> void:
@@ -809,11 +804,11 @@ func _draw_stadium(cx: float, top: float, w: float, h: float, col: Color) -> voi
     draw_circle(Vector2(cx, top + h * 0.5), hw, col)
 
 func _face_suffix(d: Vector2i) -> String:
-  if d == Vector2i(1, 0): return "_se"
-  if d == Vector2i(0, 1): return "_sw"
-  if d == Vector2i(-1, 0): return "_nw"
-  if d == Vector2i(0, -1): return "_ne"
-  return "_s"
+  if d == Vector2i(1, 0): return "_e"
+  if d == Vector2i(0, 1): return "_s"
+  if d == Vector2i(-1, 0): return "_w"
+  if d == Vector2i(0, -1): return "_n"
+  return "_s"   # idle -> face the camera
 
 func _echo_face(i: int) -> Vector2i:
   var e: Dictionary = echoes[i]
@@ -824,26 +819,50 @@ func _echo_face(i: int) -> Vector2i:
       step = (dl[dl.size() - 1] as Vector2i) - (dl[dl.size() - 2] as Vector2i)
   return step
 
-func _draw_pawn(pos: Vector2, kind: int, face: Vector2i) -> void:
+# kind: 0 = solid player, 1 = recording (phasing) player, 2 = ghost. idx = deploy order for ghosts
+# (-1 = player / preview) -> drives the subtle per-ghost tint + numeral badge.
+func _draw_pawn(pos: Vector2, kind: int, face: Vector2i, idx := -1) -> void:
   var ghost := kind == 2
   var phase := kind == 1
   var a := echo_alpha if ghost else (0.82 if phase else 1.0)
-  var sname := ("gh" if ghost else "pl") + _face_suffix(face)
-  if not tex.has(sname):
-    sname = ("gh" if ghost else "pl") + "_s"
-  if tex.has(sname):
-    draw_set_transform(pos, 0.0, Vector2(1.0, 0.5))
-    draw_circle(Vector2.ZERO, 16.0, Color(0, 0, 0, (0.12 if ghost else 0.26) * a))
-    draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-    var t: Texture2D = tex[sname]
+  var mod := Color(1, 1, 1, a)
+  if ghost and idx >= 0:
+    var tnt: Color = GHOST_TINTS[idx % GHOST_TINTS.size()]   # subtle per-deploy-order hue step
+    mod = Color(tnt.r, tnt.g, tnt.b, a)
+  var t := _get_tex(("gh" if ghost else "pl") + _face_suffix(face))
+  if t == null:
+    t = _get_tex(("gh" if ghost else "pl") + "_s")
+  if t != null:
     var sz := Vector2(t.get_size())
-    draw_texture_rect(t, Rect2(pos - CHAR_ANCHOR * CHAR_SCALE, sz * CHAR_SCALE), false, Color(1, 1, 1, a))
+    var csc: float = (char_scale_frac * _ts) / maxf(1.0, sz.y)
+    var anchor := Vector2(sz.x * CHAR_FOOT.x, sz.y * CHAR_FOOT.y)
+    # flattened contact shadow at the feet
+    draw_set_transform(pos, 0.0, Vector2(1.0, 0.45))
+    draw_circle(Vector2.ZERO, _ts * 0.22, Color(0, 0, 0, (0.12 if ghost else 0.26) * a))
+    draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+    draw_texture_rect(t, Rect2(pos - anchor * csc, sz * csc), false, mod)
+    var ring_y := pos.y - _ts * 0.42
     if ghost:
-      draw_arc(Vector2(pos.x, pos.y - 24.0), 25.0, 0.0, TAU, 28, Color(C_GHOST.r, C_GHOST.g, C_GHOST.b, 0.5 * a), 1.6)
+      draw_arc(Vector2(pos.x, ring_y), _ts * 0.28, 0.0, TAU, 28, Color(C_GHOST.r, C_GHOST.g, C_GHOST.b, 0.5 * a), 1.6)
     elif phase:
-      draw_arc(Vector2(pos.x, pos.y - 24.0), 25.0, 0.0, TAU, 28, Color(C_PHASE_RING.r, C_PHASE_RING.g, C_PHASE_RING.b, 0.7), 1.8)
+      draw_arc(Vector2(pos.x, ring_y), _ts * 0.28, 0.0, TAU, 28, Color(C_PHASE_RING.r, C_PHASE_RING.g, C_PHASE_RING.b, 0.7), 1.8)
+    if ghost and idx >= 0 and echoes.size() >= 2:
+      _draw_ghost_badge(pos - Vector2(0, char_scale_frac * _ts * 0.92), idx + 1)
     return
   _draw_pawn_vector(pos, kind)
+
+# Tiny numbered badge above a ghost's head so several stacked echoes stay individually readable.
+func _draw_ghost_badge(pos: Vector2, n: int) -> void:
+  var r := maxf(7.0, _ts * 0.12)
+  draw_circle(pos, r, Color(0.10, 0.08, 0.16, 0.85))
+  draw_arc(pos, r, 0.0, TAU, 20, Color(C_GHOST.r, C_GHOST.g, C_GHOST.b, 0.9), 1.5)
+  var f := ThemeDB.fallback_font
+  if f == null:
+    return
+  var fs := int(r * 1.5)
+  var s := str(n)
+  var tw := f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
+  draw_string(f, pos + Vector2(-tw.x * 0.5, tw.y * 0.32), s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.96, 0.96, 1.0, 0.96))
 
 func _draw_pawn_vector(pos: Vector2, kind: int) -> void:
   var ghost := kind == 2
@@ -871,117 +890,182 @@ func _draw_pawn_vector(pos: Vector2, kind: int) -> void:
   elif phase:
     draw_arc(Vector2(cx, top + bh * 0.4), 29.0, 0.0, TAU, 32, Color(C_PHASE_RING.r, C_PHASE_RING.g, C_PHASE_RING.b, 0.65), 1.8)
 
-# ---- Rendering: one back-to-front painter pass ----
+# ---- Rendering: flat top-down, clean back-to-front LAYERS (no iso occlusion to resolve) ----
 func _draw() -> void:
   draw_texture_rect(bg_tex, Rect2(Vector2.ZERO, get_viewport_rect().size), false)
   _draw_backdrop()
-  for s in range(0, grid_w + grid_h - 1):
+  # 1) floor tiles + grid lines + per-height tint (row-major)
+  for y in range(grid_h):
     for x in range(grid_w):
-      var y := s - x
-      if y < 0 or y >= grid_h:
-        continue
+      var cell := Vector2i(x, y)
+      if floors.has(cell):
+        _draw_floor(cell)
+  # 2) elevation ledges between cells of differing height (no-op on the current flat levels)
+  if _max_height > 0:
+    _draw_ledges()
+  # 3) floor decals (hazards / switch plates / exit door), drawn on top of the floor
+  for y in range(grid_h):
+    for x in range(grid_w):
+      var cell := Vector2i(x, y)
+      if floors.has(cell):
+        _draw_decals(cell)
+  # 4) walls — flat blocks, no vertical face (one tile, full stop)
+  for y in range(grid_h):
+    for x in range(grid_w):
       var cell := Vector2i(x, y)
       if walls.has(cell):
         _draw_wall(cell)
-      elif floors.has(cell):
-        _draw_floor(cell)
-    _draw_pawns_at(s)
+  # 5) decor props (sparse; wall-variant decor is handled inside _draw_wall). Never over a
+  #    switch/exit/hazard so clarity is preserved; missing sprite = quietly skipped.
+  for y in range(grid_h):
+    for x in range(grid_w):
+      var cell := Vector2i(x, y)
+      if floors.has(cell) and decor.has(cell) and not plates.has(cell) and cell != exit_cell and not hazards.has(cell):
+        _blit_tile(decor[cell], cell, 0.9)
+  # 6) ghost trail overlays — above floor/decor, UNDER pawns, so they never hide behind geometry
   _draw_paths()
+  # 7) pawns (player + ghosts), radially staggered when several share a cell
+  _draw_all_pawns()
 
-# Faint isometric floor expanse around the playable island so the level doesn't float in a void.
-# Mossy-stone diamonds tile outward and fade to nothing with distance from the board centre,
-# before the vignette (layer 5) darkens the edges. Purely cosmetic — never consulted by logic.
+# Flat surround: a faint square-tile motif a few cells beyond the playable board, fading with
+# distance so the level doesn't float in a void (the vignette on layer 5 darkens the outer edge
+# further). Purely cosmetic — never consulted by logic. Replaces the old iso diamond tiling.
 func _draw_backdrop() -> void:
   if grid_w == 0 or grid_h == 0:
     return
   var cx := (grid_w - 1) * 0.5
   var cy := (grid_h - 1) * 0.5
   var edge := maxf(cx, cy)
-  var pad := 7
+  var pad := 6
   for x in range(-pad, grid_w + pad):
     for y in range(-pad, grid_h + pad):
       if x >= 0 and x < grid_w and y >= 0 and y < grid_h:
         continue   # the real floor/wall pass owns the island itself
       var d := Vector2(x - cx, y - cy).length()
-      var a := clampf(0.15 - (d - edge) * 0.017, 0.0, 0.15)
+      var a := clampf(0.16 - (d - edge) * 0.02, 0.0, 0.16)
       if a <= 0.0:
         continue
-      var c := _ground(Vector2i(x, y))
       var base := C_FLOOR if ((x + y) & 1) == 0 else C_FLOOR_EDGE
-      var dia := _diamond(c, tile_w, tile_h)
-      draw_colored_polygon(dia, Color(base.r, base.g, base.b, a))
-      var ol := dia.duplicate(); ol.append(dia[0])
-      draw_polyline(ol, Color(C_FLOOR_EDGE.r, C_FLOOR_EDGE.g, C_FLOOR_EDGE.b, a * 0.7), 1.0)
+      var r := _cell_rect(_ground(Vector2i(x, y)), _ts)
+      draw_rect(r, Color(base.r, base.g, base.b, a))
+      draw_rect(r, Color(C_BG_OUT.r, C_BG_OUT.g, C_BG_OUT.b, a * 0.7), false, 1.0)
 
-func _draw_pawns_at(s: int) -> void:
+# Subtle "step-down" cue between a raised cell and a lower / off-grid neighbour: only the HIGHER
+# cell draws, on the shared edge, so it reads as a small ledge. Drawn over floors, under decals.
+func _draw_ledges() -> void:
+  var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+  var half := _ts * 0.5
+  for cell in floors.keys():
+    var h := _height(cell)
+    if h <= 0:
+      continue
+    var c := _ground(cell)
+    for d in dirs:
+      var nb: Vector2i = cell + d
+      var nh: int = _height(nb) if floors.has(nb) else 0
+      if nh >= h:
+        continue
+      var mid := c + Vector2(d.x, d.y) * half
+      var perp := Vector2(-d.y, d.x) * half
+      draw_line(mid - perp, mid + perp, Color(0, 0, 0, 0.30), maxf(2.0, _ts * 0.06))
+      var inw := Vector2(d.x, d.y) * (_ts * 0.06)
+      draw_line(mid - perp - inw, mid + perp - inw, Color(1, 1, 1, 0.10), maxf(1.0, _ts * 0.03))
+
+# Draw every pawn: ghosts (kind 2) plus the player (kind 0 PLAY / 1 RECORD). When several pawns
+# share a logical cell they'd overlap exactly, so stagger them on a small deterministic radial ring
+# for legibility. Sorted by screen-y so lower (front) pawns overlap higher (back) ones naturally.
+func _draw_all_pawns() -> void:
+  var by_cell := {}
   for i in range(echoes.size()):
-    var gc := _echo_pos(echoes[i], tick)
-    if gc.x + gc.y == s:
-      _draw_pawn(_echo_draw(i), 2, _echo_face(i))
-  if player_cell.x + player_cell.y == s:
-    _draw_pawn(_player_draw(), 1 if mode == Mode.RECORD else 0, player_face)
+    var gc: Vector2i = _echo_pos(echoes[i], tick)
+    if not by_cell.has(gc):
+      by_cell[gc] = []
+    by_cell[gc].append({"i": i, "kind": 2})
+  if not by_cell.has(player_cell):
+    by_cell[player_cell] = []
+  by_cell[player_cell].append({"i": -1, "kind": 1 if mode == Mode.RECORD else 0})
+  var entries := []
+  for cell in by_cell.keys():
+    var lst: Array = by_cell[cell]
+    var n := lst.size()
+    for j in range(n):
+      var e: Dictionary = lst[j]
+      var pi: int = e["i"]
+      var base_pos: Vector2 = _echo_draw(pi) if pi >= 0 else _player_draw()
+      var off := Vector2.ZERO
+      if n > 1:
+        var ang := TAU * float(j) / float(n) - PI * 0.5
+        var rad := _ts * 0.20
+        off = Vector2(cos(ang) * rad, sin(ang) * rad * 0.6)
+      var face: Vector2i = _echo_face(pi) if pi >= 0 else player_face
+      entries.append({"pos": base_pos + off, "kind": int(e["kind"]), "face": face, "idx": pi})
+  entries.sort_custom(func(a, b): return a["pos"].y < b["pos"].y)
+  for e in entries:
+    _draw_pawn(e["pos"], e["kind"], e["face"], e["idx"])
 
+# Floor TILE only (decals are a separate pass): the checker tile, a per-height brightening tint,
+# and a thin low-alpha grid line on every edge — the highest-value legibility win for a puzzle with
+# several stacked translucent actors.
 func _draw_floor(cell: Vector2i) -> void:
-  var c := _surface(cell)
   var h := _height(cell)
-  if h > 0:
-    _draw_column(c, h * level_step)
+  var tint := 1.0 + elev_tint_step * float(clampi(h, 0, 5))
+  var mod := Color(tint, tint, tint, 1.0)
+  var variant := "td_floor_b" if ((cell.x + cell.y) % 2 == 1) else "td_floor_a"
+  if not _blit_tile(variant, cell, 1.0, mod):
+    if not _blit_tile("td_floor_a", cell, 1.0, mod):
+      draw_rect(_cell_rect(_ground(cell), _ts), C_FLOOR.lightened(clampf(tint - 1.0, 0.0, 0.6)))
+  draw_rect(_cell_rect(_ground(cell), _ts), Color(C_FLOOR_EDGE.r, C_FLOOR_EDGE.g, C_FLOOR_EDGE.b, 0.22), false, 1.0)
+
+# Floor decals drawn on top of the floor tile (below walls/pawns): hazard pit, switch plate, exit.
+func _draw_decals(cell: Vector2i) -> void:
+  var c := _ground(cell)
   if hazards.has(cell):
-    if not _blit("hazard", c):
-      draw_colored_polygon(_diamond(c, tile_w, tile_h), Color("1d1b17"))
-      for i in range(-1, 2):
-        var tx := c.x + i * 20.0
-        draw_colored_polygon(PackedVector2Array([
-          Vector2(tx - 8, c.y + 4), Vector2(tx + 8, c.y + 4), Vector2(tx, c.y - 14)]), C_PIT_TEETH)
+    if not _blit_tile("td_hazard", cell):
+      _draw_hazard_fallback(cell)
     return
-  var variant := "floor_b" if ((cell.x + cell.y) % 2 == 1) else "floor_a"
-  if not _blit(variant, c):
-    if not _blit("floor_a", c):
-      var dia := _diamond(c, tile_w, tile_h)
-      draw_colored_polygon(dia, C_FLOOR)
-      var ol := dia.duplicate(); ol.append(dia[0])
-      draw_polyline(ol, C_FLOOR_EDGE, 2.0)
-  if decor.has(cell):
-    _blit(decor[cell], c)   # ground props (rubble, mushrooms, crystal...) sit on the floor
   if plates.has(cell):
-    _blit("plate", c)
+    if not _blit_tile("td_plate", cell):
+      draw_rect(_cell_rect(c, _ts * 0.74), Color(0.16, 0.19, 0.18, 0.9))
     var on: bool = pressed_plates.get(cell, false)
     var glow := C_PLATE_ON if on else C_PLATE
-    var ga := 0.62 if on else 0.32
-    draw_colored_polygon(_diamond(c, tile_w * 0.62, tile_h * 0.62), Color(glow.r, glow.g, glow.b, ga * 0.45))
-    draw_colored_polygon(_diamond(c, tile_w * 0.42, tile_h * 0.42), Color(glow.r, glow.g, glow.b, ga))
-    draw_colored_polygon(_diamond(c, tile_w * 0.18, tile_h * 0.18), Color(1, 1, 1, ga * 0.5))
+    var ga := 0.62 if on else 0.30
+    draw_rect(_cell_rect(c, _ts * 0.60), Color(glow.r, glow.g, glow.b, ga * 0.45))
+    draw_rect(_cell_rect(c, _ts * 0.40), Color(glow.r, glow.g, glow.b, ga))
+    draw_rect(_cell_rect(c, _ts * 0.16), Color(1, 1, 1, ga * 0.5))
   if cell == exit_cell:
     if exit_open:
-      # active portal: light pools on the threshold, the open door, then a beam rising through it
-      draw_colored_polygon(_diamond(c, tile_w * 0.78, tile_h * 0.78), Color(C_EXIT_ON.r, C_EXIT_ON.g, C_EXIT_ON.b, 0.22))
-      _blit("door_open", c)
-      draw_colored_polygon(_diamond(c, tile_w * 0.34, tile_h * 0.34), Color(C_EXIT_ON.r, C_EXIT_ON.g, C_EXIT_ON.b, 0.5))
-      draw_colored_polygon(_diamond(c, tile_w * 0.16, tile_h * 0.16), Color(1, 1, 1, 0.45))
-      var bw := tile_w * 0.16
-      draw_colored_polygon(PackedVector2Array([
-        c + Vector2(-bw, 0), c + Vector2(bw, 0),
-        c + Vector2(bw * 0.55, -96.0), c + Vector2(-bw * 0.55, -96.0)]),
-        Color(C_EXIT_ON.r, C_EXIT_ON.g, C_EXIT_ON.b, 0.16))
+      draw_rect(_cell_rect(c, _ts * 0.92), Color(C_EXIT_ON.r, C_EXIT_ON.g, C_EXIT_ON.b, 0.20))
+      if not _blit_tile("td_door_open", cell):
+        draw_rect(_cell_rect(c, _ts * 0.72), Color(C_EXIT_ON.r, C_EXIT_ON.g, C_EXIT_ON.b, 0.55))
+      draw_rect(_cell_rect(c, _ts * 0.30), Color(C_EXIT_ON.r, C_EXIT_ON.g, C_EXIT_ON.b, 0.5))
+      draw_rect(_cell_rect(c, _ts * 0.14), Color(1, 1, 1, 0.5))
     else:
-      # sealed door — no glow, so a closed exit clearly reads as closed
-      _blit("door_closed", c)
+      if not _blit_tile("td_door_closed", cell):
+        # sealed door — dark barred block, no glow, so a closed exit clearly reads as closed
+        draw_rect(_cell_rect(c, _ts * 0.82), Color(C_EXIT.r, C_EXIT.g, C_EXIT.b, 0.85))
+        draw_rect(_cell_rect(c, _ts * 0.82), Color(0, 0, 0, 0.55), false, 2.0)
 
+func _draw_hazard_fallback(cell: Vector2i) -> void:
+  var c := _ground(cell)
+  draw_rect(_cell_rect(c, _ts), Color("1d1b17"))
+  var n := 3
+  for i in range(n):
+    var tx := c.x + (float(i) - float(n - 1) * 0.5) * (_ts * 0.24)
+    var half := _ts * 0.10
+    draw_colored_polygon(PackedVector2Array([
+      Vector2(tx - half, c.y + _ts * 0.12),
+      Vector2(tx + half, c.y + _ts * 0.12),
+      Vector2(tx, c.y - _ts * 0.18)]), C_PIT_TEETH)
+  draw_rect(_cell_rect(c, _ts), Color(0, 0, 0, 0.5), false, 1.0)
+
+# Flat wall block: one tile, no vertical face / column, no sprite bleed into neighbours. A subtle
+# bevel (dark border + lit inset face) is drawn procedurally when the sprite is missing.
 func _draw_wall(cell: Vector2i) -> void:
-  var sname: String = decor.get(cell, "wall")   # mossy/cracked/crystal/brazier variants are full blocks
-  if not _blit(sname, _ground(cell)) and not _blit("wall", _ground(cell)):
-    var base := _ground(cell)
-    var top := base - Vector2(0, wall_height)
-    var b := _diamond(base, tile_w, tile_h)
-    var t := _diamond(top, tile_w, tile_h)
-    draw_colored_polygon(PackedVector2Array([t[3], t[2], b[2], b[3]]), C_WALL_L)
-    draw_colored_polygon(PackedVector2Array([t[2], t[1], b[1], b[2]]), C_WALL_R)
-    draw_colored_polygon(t, C_WALL_TOP)
-    var ol := t.duplicate(); ol.append(t[0])
-    draw_polyline(ol, C_WALL_TOP.darkened(0.4), 2.0)
-  if vines.has(cell):
-    var base2 := _ground(cell)
-    _draw_vine(base2.x - tile_w * 0.22, base2.y - wall_height + 8.0, wall_height + 8.0, cell.x * 2.7 + cell.y * 1.9)
+  var sname: String = decor.get(cell, "td_wall")   # wall-variant decor (if any) replaces the block
+  if not _blit_tile(sname, cell) and not _blit_tile("td_wall", cell):
+    var r := _cell_rect(_ground(cell), _ts)
+    draw_rect(r, C_WALL_R)                              # dark base / border
+    draw_rect(_cell_rect(_ground(cell), _ts * 0.9), C_WALL_TOP)   # lit face inset (stays in-cell)
 
 # ---- Path traces ----
 func _draw_trace(path: Array, col: Color, w: float) -> void:
